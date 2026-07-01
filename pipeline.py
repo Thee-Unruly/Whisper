@@ -5,12 +5,23 @@ Importable by the FastAPI app (no CLI/argparse here).
 
 import os
 import sys
+import tempfile
+
+# Windows + OneDrive-synced project folders cause numba (a Whisper dependency)
+# to fail with "[Errno 22] Invalid argument" when it tries to write its JIT
+# compile cache, because OneDrive's Files On-Demand layer doesn't support the
+# file operations numba needs. Redirect the cache to a local, non-synced temp
+# folder to avoid this. Must be set before whisper (and numba) are imported.
+os.environ.setdefault(
+    "NUMBA_CACHE_DIR",
+    os.path.join(tempfile.gettempdir(), "numba_cache"),
+)
 
 # ---- CONFIG ----
 DB_CONFIG = {
-    "dbname": os.environ.get("PGDATABASE", "your_db"),
-    "user": os.environ.get("PGUSER", "your_user"),
-    "password": os.environ.get("PGPASSWORD", "your_password"),
+    "dbname": os.environ.get("PGDATABASE", "transcripts_agile"),
+    "user": os.environ.get("PGUSER", "postgres"),
+    "password": os.environ.get("PGPASSWORD", "@Phadhylly20"),
     "host": os.environ.get("PGHOST", "localhost"),
     "port": os.environ.get("PGPORT", 5432),
 }
