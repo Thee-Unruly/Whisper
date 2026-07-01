@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+python-multipart
+openai-whisper
+sentence-transformers
+psycopg2-binary
+requests
+pydantic
+python-dotenv
