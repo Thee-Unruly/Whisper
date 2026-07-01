@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Signal — Transcript Knowledge Base</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg: #13100C;
+            --panel: #1B1712;
+            --panel-raised: #211C15;
+            --border: #332C22;
+            --text: #EDE6DA;
+            --muted: #8A7F6E;
+            --amber: #E8A33D;
+            --amber-dim: #6B5326;
+            --green: #6FA97C;
+            --red: #C4574A;
+            --radius: 3px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            background-image:
+                radial-gradient(circle at 15% 0%, rgba(232, 163, 61, 0.05), transparent 40%),
+                repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.008) 0px, rgba(255, 255, 255, 0.008) 1px, transparent 1px, transparent 3px);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            padding: 32px 20px 60px;
+        }
+
+        .wrap {
+            max-width: 920px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .brand-mark {
+            width: 34px;
+            height: 34px;
+            border: 1.5px solid var(--amber);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .brand-mark::after {
+            content: "";
+            width: 10px;
+            height: 10px;
+            background: var(--amber);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--amber);
+        }
+
+        h1 {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            margin: 0;
+        }
+
+        .tagline {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11px;
+            color: var(--muted);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-top: 2px;
+        }
+
+        .live-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11px;
+            color: var(--muted);
+            letter-spacing: 0.06em;
+        }
+
+        .eq {
+            display: flex;
+            align-items: flex-end;
+            gap: 2px;
+            height: 14px;
+        }
+
+        .eq span {
+            width: 3px;
+            background: var(--amber-dim);
+            border-radius: 1px;
+            animation: eqbounce 1.2s ease-in-out infinite;
+        }
+
+        .eq span:nth-child(1) {
+            height: 40%;
+            animation-delay: 0s;
+        }
+
+        .eq span:nth-child(2) {
+            height: 100%;
+            animation-delay: 0.15s;
+        }
+
+        .eq span:nth-child(3) {
+            height: 60%;
+            animation-delay: 0.3s;
+        }
+
+        .eq span:nth-child(4) {
+            height: 85%;
+            animation-delay: 0.45s;
+        }
+
+        @keyframes eqbounce {
+
+            0%,
+            100% {
+                transform: scaleY(0.4);
+                opacity: 0.5;
+            }
+
+            50% {
+                transform: scaleY(1);
+                opacity: 1;
+            }
+        }
+
+        .eq.active span {
+            background: var(--amber);
+        }
+
+        .decks {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 28px;
+        }
+
+        @media (max-width: 760px) {
+            .decks {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .deck {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+
+        .deck-label {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 10.5px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--muted);
+            padding: 12px 18px;
+            border-bottom: 1px solid var(--border);
+            background: var(--panel-raised);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .deck-body {
+            padding: 18px;
+        }
+
+        label {
+            display: block;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 10.5px;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--muted);
+            margin: 14px 0 6px;
+        }
+
+        label:first-child {
+            margin-top: 0;
+        }
+
+        input[type="file"] {
+            width: 100%;
+            font-size: 13px;
+            color: var(--muted);
+            padding: 10px;
+            background: var(--bg);
+            border: 1px dashed var(--border);
+            border-radius: var(--radius);
+        }
+
+        input[type="number"],
+        input[type="text"],
+        select {
+            width: 100%;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 9px 10px;
+            color: var(--text);
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 13px;
+        }
+
+        input[type="text"] {
+            font-family: 'Inter', sans-serif;
+        }
+
+        input:focus,
+        select:focus {
+            outline: none;
+            border-color: var(--amber-dim);
+        }
+
+        .row2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 16px;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .checkbox-row input {
+            width: auto;
+            accent-color: var(--amber);
+        }
+
+        .rec-btn {
+            margin-top: 20px;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            background: transparent;
+            border: 1px solid var(--amber-dim);
+            border-radius: var(--radius);
+            padding: 12px;
+            color: var(--amber);
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .rec-btn:hover:not(:disabled) {
+            background: rgba(232, 163, 61, 0.08);
+            border-color: var(--amber);
+        }
+
+        .rec-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .rec-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: var(--amber);
+        }
+
+        .rec-btn.recording .rec-dot {
+            animation: pulse 1s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+                box-shadow: 0 0 0 0 rgba(232, 163, 61, 0.5);
+            }
+
+            50% {
+                opacity: 0.6;
+                box-shadow: 0 0 0 5px rgba(232, 163, 61, 0);
+            }
+        }
+
+        .search-btn {
+            margin-top: 20px;
+            width: 100%;
+            background: var(--amber);
+            border: none;
+            border-radius: var(--radius);
+            padding: 12px;
+            color: #13100C;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+
+        .search-btn:hover {
+            background: #f0b458;
+        }
+
+        .tape-counter {
+            margin-top: 16px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 12px 14px;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11.5px;
+            color: var(--muted);
+            max-height: 150px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .tape-counter.visible {
+            display: block;
+        }
+
+        .tape-counter div {
+            padding: 2px 0;
+        }
+
+        .tape-counter div::before {
+            content: "▸ ";
+            color: var(--amber-dim);
+        }
+
+        .status-line {
+            margin-top: 12px;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 11px;
+            letter-spacing: 0.04em;
+            display: none;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-line.visible {
+            display: flex;
+        }
+
+        .status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+        }
+
+        .status-running .status-dot {
+            background: var(--amber);
+            animation: pulse 1s infinite;
+        }
+
+        .status-complete .status-dot {
+            background: var(--green);
+        }
+
+        .status-error .status-dot {
+            background: var(--red);
+        }
+
+        .status-running {
+            color: var(--amber);
+        }
+
+        .status-complete {
+            color: var(--green);
+        }
+
+        .status-error {
+            color: var(--red);
+        }
+
+        .results {
+            margin-top: 18px;
+        }
+
+        .result {
+            border-top: 1px solid var(--border);
+            padding: 14px 0;
+        }
+
+        .result:first-child {
+            border-top: none;
+            padding-top: 4px;
+        }
+
+        .result-meta {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 10.5px;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
+        .result-time {
+            background: var(--panel-raised);
+            border: 1px solid var(--border);
+            border-radius: 2px;
+            padding: 1px 6px;
+            color: var(--amber);
+        }
+
+        .result-text {
+            font-size: 13.5px;
+            line-height: 1.55;
+            color: var(--text);
+        }
+
+        .empty-state {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 12px;
+            color: var(--muted);
+            padding: 20px 0;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+
+        <header>
+            <div class="brand">
+                <div class="brand-mark"></div>
+                <div>
+                    <h1>Signal</h1>
+                    <div class="tagline">Transcript Knowledge Base</div>
+                </div>
+            </div>
+            <div class="live-indicator">
+                <div class="eq" id="headerEq"><span></span><span></span><span></span><span></span></div>
+                ON AIR
+            </div>
+        </header>
+
+        <div class="decks">
+            <div class="deck">
+                <div class="deck-label"><span>Input Deck</span><span id="modelBadge">BASE</span></div>
+                <div class="deck-body">
+                    <label>Media file</label>
+                    <input type="file" id="fileInput" accept="audio/*,video/*" />
+
+                    <div class="row2">
+                        <div>
+                            <label>Whisper model</label>
+                            <select id="modelSelect"
+                                onchange="document.getElementById('modelBadge').textContent = this.value.toUpperCase()">
+                                <option value="tiny">Tiny</option>
+                                <option value="base" selected>Base</option>
+                                <option value="small">Small</option>
+                                <option value="medium">Medium</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>Chunk length (sec)</label>
+                            <input type="number" id="chunkSeconds" value="30" min="5" max="120" />
+                        </div>
+                    </div>
+
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="skipCorrection" />
+                        <label style="margin:0; text-transform:none; letter-spacing:0;">Skip LLM correction pass</label>
+                    </div>
+
+                    <button class="rec-btn" id="processBtn" onclick="startProcessing()">
+                        <span class="rec-dot"></span> PROCESS
+                    </button>
+
+                    <div class="status-line" id="jobStatus"><span class="status-dot"></span><span
+                            id="jobStatusText"></span></div>
+                    <div class="tape-counter" id="log"></div>
+                </div>
+            </div>
+
+            <div class="deck">
+                <div class="deck-label"><span>Search Deck</span><span id="resultCount"></span></div>
+                <div class="deck-body">
+                    <label>Query</label>
+                    <input type="text" id="searchInput" placeholder="what did they say about pricing?"
+                        onkeydown="if(event.key==='Enter') runSearch()" />
+
+                    <label>Results to return</label>
+                    <input type="number" id="topK" value="5" min="1" max="20" />
+
+                    <button class="search-btn" onclick="runSearch()">Search</button>
+
+                    <div class="results" id="searchResults">
+                        <div class="empty-state">No query yet — the deck is quiet.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const API_BASE = "";
+
+        function startProcessing() {
+            const fileInput = document.getElementById("fileInput");
+            const btn = document.getElementById("processBtn");
+            const logEl = document.getElementById("log");
+            const statusEl = document.getElementById("jobStatus");
+            const statusText = document.getElementById("jobStatusText");
+            const headerEq = document.getElementById("headerEq");
+
+            if (!fileInput.files.length) {
+                alert("Choose a file first.");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+            formData.append("model", document.getElementById("modelSelect").value);
+            formData.append("chunk_seconds", document.getElementById("chunkSeconds").value);
+            formData.append("skip_correction", document.getElementById("skipCorrection").checked);
+
+            btn.disabled = true;
+            btn.classList.add("recording");
+            logEl.classList.add("visible");
+            logEl.innerHTML = "";
+            statusEl.className = "status-line visible status-running";
+            statusText.textContent = "uploading...";
+            headerEq.classList.add("active");
+
+            fetch(`${API_BASE}/process`, { method: "POST", body: formData })
+                .then(res => {
+                    if (!res.ok) throw new Error("upload failed");
+                    return res.json();
+                })
+                .then(({ job_id }) => pollStatus(job_id, btn, headerEq))
+                .catch(() => {
+                    statusEl.className = "status-line visible status-error";
+                    statusText.textContent = "upload failed";
+                    resetBtn(btn, headerEq);
+                });
+        }
+
+        function resetBtn(btn, headerEq) {
+            btn.disabled = false;
+            btn.classList.remove("recording");
+            headerEq.classList.remove("active");
+        }
+
+        function pollStatus(jobId, btn, headerEq) {
+            const logEl = document.getElementById("log");
+            const statusEl = document.getElementById("jobStatus");
+            const statusText = document.getElementById("jobStatusText");
+
+            const interval = setInterval(async () => {
+                const res = await fetch(`${API_BASE}/status/${jobId}`);
+                const job = await res.json();
+
+                logEl.innerHTML = job.messages.map(m => `<div>${m}</div>`).join("");
+                logEl.scrollTop = logEl.scrollHeight;
+
+                if (job.status === "complete") {
+                    clearInterval(interval);
+                    statusEl.className = "status-line visible status-complete";
+                    statusText.textContent = `done — ${job.result.chunks_saved} chunks saved`;
+                    resetBtn(btn, headerEq);
+                } else if (job.status === "error") {
+                    clearInterval(interval);
+                    statusEl.className = "status-line visible status-error";
+                    statusText.textContent = `error — ${job.error}`;
+                    resetBtn(btn, headerEq);
+                } else {
+                    statusText.textContent = job.status + "...";
+                }
+            }, 1500);
+        }
+
+        async function runSearch() {
+            const query = document.getElementById("searchInput").value.trim();
+            const topK = document.getElementById("topK").value;
+            const resultsEl = document.getElementById("searchResults");
+            const countEl = document.getElementById("resultCount");
+
+            if (!query) return;
+
+            resultsEl.innerHTML = `<div class="empty-state">searching...</div>`;
+
+            const res = await fetch(`${API_BASE}/search`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ query, top_k: parseInt(topK) }),
+            });
+
+            if (!res.ok) {
+                resultsEl.innerHTML = `<div class="empty-state">search failed</div>`;
+                return;
+            }
+
+            const { results } = await res.json();
+            countEl.textContent = results.length ? `${results.length} MATCH${results.length > 1 ? "ES" : ""}` : "";
+
+            if (!results.length) {
+                resultsEl.innerHTML = `<div class="empty-state">No matches — the tape is silent here.</div>`;
+                return;
+            }
+
+            resultsEl.innerHTML = results.map(r => `
+    <div class="result">
+      <div class="result-meta">
+        <span class="result-time">${formatTime(r.start_time)}&ndash;${formatTime(r.end_time)}</span>
+        <span>${escapeHtml(r.source_file)}</span>
+        <span>&middot; ${r.distance.toFixed(3)}</span>
+      </div>
+      <div class="result-text">${escapeHtml(r.text)}</div>
+    </div>
+  `).join("");
+        }
+
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60).toString().padStart(2, "0");
+            return `${m}:${s}`;
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement("div");
+            div.textContent = str;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+
+</html>
