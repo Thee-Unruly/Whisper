@@ -469,7 +469,7 @@
             </div>
             <div class="live-indicator">
                 <div class="eq" id="headerEq"><span></span><span></span><span></span><span></span></div>
-                ON AIR
+                <span id="statsText">connecting to db...</span>
             </div>
         </header>
 
@@ -536,6 +536,18 @@
     <script>
         const API_BASE = "";
 
+        async function loadStats() {
+            const statsEl = document.getElementById("statsText");
+            try {
+                const res = await fetch(`${API_BASE}/stats`);
+                const data = await res.json();
+                statsEl.textContent = `${data.total_chunks} chunks · ${data.total_files} files in db`;
+            } catch {
+                statsEl.textContent = "db unreachable";
+            }
+        }
+        loadStats();
+
         function startProcessing() {
             const fileInput = document.getElementById("fileInput");
             const btn = document.getElementById("processBtn");
@@ -599,6 +611,7 @@
                     statusEl.className = "status-line visible status-complete";
                     statusText.textContent = `done — ${job.result.chunks_saved} chunks saved`;
                     resetBtn(btn, headerEq);
+                    loadStats();
                 } else if (job.status === "error") {
                     clearInterval(interval);
                     statusEl.className = "status-line visible status-error";
