@@ -60,18 +60,22 @@ doesn't exist.
 ### 3. Set environment variables
 
 ```bash
-export OPENROUTER_API_KEY="sk-or-..."
-
-export PGDATABASE="your_db"
-export PGUSER="your_user"
-export PGPASSWORD="your_password"
-export PGHOST="localhost"
-export PGPORT="5432"
+cp .env.example .env
 ```
 
-If these Postgres vars aren't set, `pipeline.py` falls back to placeholder
-defaults — edit them directly in `pipeline.py` if you'd rather not use env
-vars.
+Then edit `.env` with your real values:
+
+```
+OPENROUTER_API_KEY=sk-or-...
+PGDATABASE=your_db
+PGUSER=your_user
+PGPASSWORD=your_password
+PGHOST=localhost
+PGPORT=5432
+```
+
+`main.py` loads `.env` automatically on startup via `python-dotenv`. Never
+commit the real `.env` file — only `.env.example` should go in version control.
 
 ### 4. Run it
 
@@ -168,6 +172,44 @@ CREATE TABLE transcript_chunks (
 changed, or roll back if a correction ever drifts from what was actually said.
 
 ---
+
+## How to verify it's actually working
+
+It's reasonable not to just trust the UI's log messages — here's how to
+confirm real work is happening at each stage:
+
+1. **Watch the terminal running `uvicorn`.** Whisper and sentence-transformers
+   print their own progress/download output there (e.g. model download bars
+   on first run, torch device info). Faked progress wouldn't produce this.
+
+2. **Check the live counter in the header.** It calls `GET /stats`, which
+   runs a real `SELECT COUNT(*)` against Postgres — not something derived
+   from the job log. Process a file and watch the number increase after
+   completion.
+
+3. **Query Postgres directly**, independent of the app entirely:
+   ```sql
+   SELECT source_file, start_time, end_time, LEFT(text, 80) AS preview
+   FROM transcript_chunks
+   ORDER BY id DESC
+   LIMIT 10;
+   ```
+   If rows show up with your actual filename and plausible timestamps, the
+   full pipeline ran end to end.
+
+4. **Compare `text` vs `text_raw`** on a row. If the correction step ran,
+   these should differ slightly (punctuation, fixed words) but say the same
+   thing. If you used `--skip-correction` equivalent (the checkbox), they'll
+   be identical or `text_raw` will be null.
+
+5. **Search for something specific** you know was said in the recording,
+   using different wording than what was actually spoken. Semantic search
+   finding it despite the wording mismatch is strong evidence the embedding
+   + pgvector similarity search is functioning, not just doing keyword match.
+
+6. **Try a short, throwaway clip first** (10–20 seconds) rather than a long
+   recording — it makes the whole pipeline finish in under a minute, so you
+   can confirm each stage quickly before committing to a long file.
 
 ## Known limitations (read before deploying anywhere but localhost)
 
