@@ -18,6 +18,9 @@ import shutil
 import uuid
 from datetime import datetime
 
+from dotenv import load_dotenv
+load_dotenv()  # reads .env in the working directory before anything else runs
+
 from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -107,6 +110,23 @@ async def status(job_id: str):
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
+
+
+@app.get("/stats")
+async def stats():
+    """Real proof the pipeline is persisting data — queries Postgres directly."""
+    import psycopg2
+    try:
+        conn = psycopg2.connect(**pipeline.DB_CONFIG)
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*), COUNT(DISTINCT source_file) FROM transcript_chunks")
+        total_chunks, total_files = cur.fetchone()
+        cur.close()
+        conn.close()
+        return {"total_chunks": total_chunks, "total_files": total_files}
+    except Exception:
+        # Table may not exist yet if nothing has been processed
+        return {"total_chunks": 0, "total_files": 0}
 
 
 class SearchRequest(BaseModel):

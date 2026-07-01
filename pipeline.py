@@ -18,7 +18,7 @@ EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 EMBEDDING_DIM = 384
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
-OPENROUTER_MODEL = "anthropic/claude-3.5-sonnet"
+OPENROUTER_MODEL = "openai/gpt-oss-120b:free"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 CORRECTION_SYSTEM_PROMPT = (
