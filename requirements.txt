@@ -1,7 +1,7 @@
 fastapi
 uvicorn[standard]
 python-multipart
-openai-whisper
+faster-whisper
 sentence-transformers
 psycopg2-binary
 requests

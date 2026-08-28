@@ -44,11 +44,19 @@ _embedding_model = None
 
 
 def get_whisper_model(model_name: str):
-    """Loads Whisper model lazily and caches across calls."""
-    import whisper
+    """Loads faster-whisper WhisperModel lazily with optimal quantization."""
+    from faster_whisper import WhisperModel
+    import torch
     if model_name not in _whisper_models:
-        logger.info(f"Loading Whisper model '{model_name}'...")
-        _whisper_models[model_name] = whisper.load_model(model_name)
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        compute_type = "float16" if device == "cuda" else "int8"
+        logger.info(f"Loading faster-whisper model '{model_name}' on device='{device}' (compute_type='{compute_type}')...")
+        _whisper_models[model_name] = WhisperModel(
+            model_name,
+            device=device,
+            compute_type=compute_type,
+            download_root=os.path.join(tempfile.gettempdir(), "whisper_cache"),
+        )
     return _whisper_models[model_name]
 
 
@@ -67,10 +75,20 @@ def get_embedding_model():
 # ==========================================
 
 def transcribe_file(audio_path: str, model_name: str = "base") -> List[Dict[str, Any]]:
-    """Stage 1: Transcribe audio using Whisper."""
+    """Stage 1: Transcribe audio using faster-whisper with Silero VAD filter."""
     model = get_whisper_model(model_name)
-    result = model.transcribe(audio_path)
-    return result.get("segments", [])
+    segments_generator, info = model.transcribe(audio_path, beam_size=5, vad_filter=True)
+    
+    segments = []
+    for seg in segments_generator:
+        text = seg.text.strip()
+        if text:
+            segments.append({
+                "start": float(seg.start),
+                "end": float(seg.end),
+                "text": text,
+            })
+    return segments
 
 
 def chunk_segments(segments: List[Dict[str, Any]], chunk_seconds: float = 30.0) -> List[Dict[str, Any]]:

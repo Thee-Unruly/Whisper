@@ -233,7 +233,7 @@ This is solid for local/internal use. Before putting it on the open internet:
 
 ## Tech stack
 
-- **Transcription**: [OpenAI Whisper](https://github.com/openai/whisper) (local)
+- **Transcription**: [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (CTranslate2, INT8 / FP16 quantized)
 - **Correction**: [Groq](https://groq.com) (default: `llama-3.1-8b-instant`)
 - **Embeddings**: [sentence-transformers](https://www.sbert.net/) `all-MiniLM-L6-v2` (local, 384-dim)
 - **Storage/search**: PostgreSQL + [pgvector](https://github.com/pgvector/pgvector)
