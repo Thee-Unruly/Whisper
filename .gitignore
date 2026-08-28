@@ -3,3 +3,6 @@ Accounting Periods.mp4
 Accounting Periods.txt
 The Love of God part 1.txt
 .env
+uploads/
+__pycache__/
+*.pyc

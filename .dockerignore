@@ -1,0 +1,31 @@
+# Git & IDE
+.git
+.gitignore
+.claude
+.vscode
+.idea
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Project specific media & temporary files
+uploads/
+*.mp4
+*.mp3
+*.wav
+*.m4a
+*.txt
+!requirements.txt
+
+# Environment & logs
+.env
+*.log

@@ -6,6 +6,8 @@ Importable by the FastAPI app (no CLI/argparse here).
 import os
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
 
 # Windows + OneDrive-synced project folders cause numba (a Whisper dependency)
 # to fail with "[Errno 22] Invalid argument" when it tries to write its JIT
@@ -21,9 +23,9 @@ os.environ.setdefault(
 DB_CONFIG = {
     "dbname": os.environ.get("PGDATABASE", "transcripts_agile"),
     "user": os.environ.get("PGUSER", "postgres"),
-    "password": os.environ.get("PGPASSWORD", "@Phadhylly20"),
+    "password": os.environ.get("PGPASSWORD", "postgres"),
     "host": os.environ.get("PGHOST", "localhost"),
-    "port": os.environ.get("PGPORT", 5432),
+    "port": int(os.environ.get("PGPORT", 5432)),
 }
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 EMBEDDING_DIM = 384
@@ -43,6 +45,36 @@ CORRECTION_SYSTEM_PROMPT = (
 # Loaded lazily and cached across requests so we don't reload models every call
 _whisper_models = {}
 _embedding_model = None
+_db_pool = None
+
+
+def get_db_pool():
+    global _db_pool
+    if _db_pool is None:
+        import psycopg2.pool
+        _db_pool = psycopg2.pool.ThreadedConnectionPool(
+            minconn=1,
+            maxconn=10,
+            **DB_CONFIG
+        )
+    return _db_pool
+
+
+@contextmanager
+def get_db_cursor(commit=False):
+    pool = get_db_pool()
+    conn = pool.getconn()
+    try:
+        with conn.cursor() as cur:
+            yield cur
+        if commit:
+            conn.commit()
+    except Exception:
+        if commit:
+            conn.rollback()
+        raise
+    finally:
+        pool.putconn(conn)
 
 
 def get_whisper_model(model_name: str):
@@ -63,7 +95,7 @@ def get_embedding_model():
 def transcribe(audio_path: str, model_name: str = "base", progress_cb=None):
     model = get_whisper_model(model_name)
     if progress_cb:
-        progress_cb("Transcribing audio...")
+        progress_cb("Transcribing audio with Whisper...")
     result = model.transcribe(audio_path)
     return result["segments"]
 
@@ -95,36 +127,62 @@ def correct_chunk_text(text: str) -> str:
     import requests
 
     if not OPENROUTER_API_KEY:
-        raise RuntimeError("OPENROUTER_API_KEY environment variable is not set.")
+        return text
 
-    response = requests.post(
-        OPENROUTER_URL,
-        headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
-        json={
-            "model": OPENROUTER_MODEL,
-            "messages": [
-                {"role": "system", "content": CORRECTION_SYSTEM_PROMPT},
-                {"role": "user", "content": text},
-            ],
-            "temperature": 0.2,
-        },
-        timeout=60,
-    )
+    try:
+        response = requests.post(
+            OPENROUTER_URL,
+            headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
+            json={
+                "model": OPENROUTER_MODEL,
+                "messages": [
+                    {"role": "system", "content": CORRECTION_SYSTEM_PROMPT},
+                    {"role": "user", "content": text},
+                ],
+                "temperature": 0.2,
+            },
+            timeout=60,
+        )
 
-    if response.status_code != 200:
-        return text  # fall back to original on API error
+        if response.status_code != 200:
+            return text  # fall back to original on API error
 
-    data = response.json()
-    return data["choices"][0]["message"]["content"].strip()
+        data = response.json()
+        return data["choices"][0]["message"]["content"].strip()
+    except Exception:
+        return text
 
 
-def correct_chunks(chunks, progress_cb=None):
-    for i, chunk in enumerate(chunks, 1):
+def correct_chunks(chunks, progress_cb=None, max_workers=6):
+    if not chunks:
+        return chunks
+
+    if not OPENROUTER_API_KEY:
+        if progress_cb:
+            progress_cb("Skipping LLM correction: OPENROUTER_API_KEY not provided.")
+        for chunk in chunks:
+            chunk["text_raw"] = chunk["text"]
+        return chunks
+
+    total = len(chunks)
+    if progress_cb:
+        progress_cb(f"Correcting {total} chunks concurrently (up to {max_workers} threads)...")
+
+    def _correct_single(item):
+        idx, chunk = item
         original = chunk["text"]
         chunk["text_raw"] = original
         chunk["text"] = correct_chunk_text(original)
-        if progress_cb:
-            progress_cb(f"Corrected chunk {i}/{len(chunks)}")
+        return idx
+
+    completed = 0
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(_correct_single, (i, c)) for i, c in enumerate(chunks, 1)]
+        for f in as_completed(futures):
+            completed += 1
+            if progress_cb:
+                progress_cb(f"Corrected chunk {completed}/{total}")
+
     return chunks
 
 
@@ -144,6 +202,10 @@ def _vector_literal(embedding):
 
 
 def ensure_table(cur):
+    # Enable pgvector extension if not already enabled
+    cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+    
+    # Create the chunks table
     cur.execute(f"""
         CREATE TABLE IF NOT EXISTS transcript_chunks (
             id SERIAL PRIMARY KEY,
@@ -155,34 +217,33 @@ def ensure_table(cur):
             embedding VECTOR({EMBEDDING_DIM})
         );
     """)
+    
+    # Create HNSW index for ultra-fast approximate nearest neighbor vector search
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS transcript_chunks_embedding_hnsw_idx 
+        ON transcript_chunks USING hnsw (embedding vector_l2_ops);
+    """)
 
 
 def save_to_postgres(chunks, source_file: str):
-    import psycopg2
+    with get_db_cursor(commit=True) as cur:
+        ensure_table(cur)
 
-    conn = psycopg2.connect(**DB_CONFIG)
-    cur = conn.cursor()
-    ensure_table(cur)
-
-    for chunk in chunks:
-        cur.execute(
-            """
-            INSERT INTO transcript_chunks (source_file, start_time, end_time, text, text_raw, embedding)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            """,
-            (
-                source_file,
-                chunk["start"],
-                chunk["end"],
-                chunk["text"],
-                chunk.get("text_raw"),
-                _vector_literal(chunk["embedding"]),
-            ),
-        )
-
-    conn.commit()
-    cur.close()
-    conn.close()
+        for chunk in chunks:
+            cur.execute(
+                """
+                INSERT INTO transcript_chunks (source_file, start_time, end_time, text, text_raw, embedding)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    source_file,
+                    chunk["start"],
+                    chunk["end"],
+                    chunk["text"],
+                    chunk.get("text_raw"),
+                    _vector_literal(chunk["embedding"]),
+                ),
+            )
 
 
 def process_file(file_path: str, source_name: str, model_name="base", chunk_seconds=30.0,
@@ -196,6 +257,9 @@ def process_file(file_path: str, source_name: str, model_name="base", chunk_seco
 
     if not skip_correction:
         chunks = correct_chunks(chunks, progress_cb)
+    else:
+        for chunk in chunks:
+            chunk["text_raw"] = chunk["text"]
 
     chunks = embed_chunks(chunks, progress_cb)
 
@@ -210,26 +274,23 @@ def process_file(file_path: str, source_name: str, model_name="base", chunk_seco
 
 
 def search_kb(query: str, top_k: int = 5):
-    import psycopg2
-
     model = get_embedding_model()
     query_embedding = model.encode([query])[0].tolist()
 
-    conn = psycopg2.connect(**DB_CONFIG)
-    cur = conn.cursor()
-    cur.execute(
-        """
-        SELECT source_file, start_time, end_time, text,
-               embedding <-> %s::vector AS distance
-        FROM transcript_chunks
-        ORDER BY embedding <-> %s::vector
-        LIMIT %s
-        """,
-        (_vector_literal(query_embedding), _vector_literal(query_embedding), top_k),
-    )
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
+    with get_db_cursor(commit=False) as cur:
+        # Ensure table/extension exist before querying
+        ensure_table(cur)
+        cur.execute(
+            """
+            SELECT source_file, start_time, end_time, text,
+                   embedding <-> %s::vector AS distance
+            FROM transcript_chunks
+            ORDER BY embedding <-> %s::vector
+            LIMIT %s
+            """,
+            (_vector_literal(query_embedding), _vector_literal(query_embedding), top_k),
+        )
+        rows = cur.fetchall()
 
     return [
         {

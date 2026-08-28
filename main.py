@@ -4,13 +4,9 @@ FastAPI backend for the transcript KB pipeline.
 Run:
     uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
-Requires (see requirements.txt):
-    fastapi uvicorn python-multipart openai-whisper sentence-transformers
-    psycopg2-binary requests
-
 Env vars required:
     OPENROUTER_API_KEY
-    PGDATABASE, PGUSER, PGPASSWORD, PGHOST, PGPORT  (or defaults in pipeline.py)
+    PGDATABASE, PGUSER, PGPASSWORD, PGHOST, PGPORT
 """
 
 import os
@@ -29,11 +25,12 @@ from pydantic import BaseModel
 
 import pipeline
 
-app = FastAPI(title="Transcript KB Pipeline")
+app = FastAPI(title="Signal — Transcript Knowledge Base")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten this for real production use
+    allow_origins=["*"],  # tighten this for strict production domains
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -41,15 +38,16 @@ app.add_middleware(
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# In-memory job store. For real production, swap this for Redis/DB-backed
-# job tracking (e.g. Celery/RQ) so jobs survive a server restart.
+# In-memory job store. For multi-worker / multi-container production, swap this
+# for Redis/DB-backed job tracking (e.g. Celery/ARQ/RQ).
 JOBS = {}
 
 
 def update_job(job_id: str, message: str, status: str = "running"):
-    JOBS[job_id]["status"] = status
-    JOBS[job_id]["messages"].append(message)
-    JOBS[job_id]["updated_at"] = datetime.utcnow().isoformat()
+    if job_id in JOBS:
+        JOBS[job_id]["status"] = status
+        JOBS[job_id]["messages"].append(message)
+        JOBS[job_id]["updated_at"] = datetime.utcnow().isoformat()
 
 
 def run_pipeline_job(job_id: str, file_path: str, source_name: str,
@@ -66,14 +64,32 @@ def run_pipeline_job(job_id: str, file_path: str, source_name: str,
             skip_correction=skip_correction,
             progress_cb=progress_cb,
         )
-        JOBS[job_id]["status"] = "complete"
-        JOBS[job_id]["result"] = {"chunks_saved": num_chunks}
+        if job_id in JOBS:
+            JOBS[job_id]["status"] = "complete"
+            JOBS[job_id]["result"] = {"chunks_saved": num_chunks}
     except Exception as e:
-        JOBS[job_id]["status"] = "error"
-        JOBS[job_id]["error"] = str(e)
+        if job_id in JOBS:
+            JOBS[job_id]["status"] = "error"
+            JOBS[job_id]["error"] = str(e)
     finally:
         if os.path.exists(file_path):
-            os.remove(file_path)
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
+
+
+@app.get("/health")
+def health():
+    """Healthcheck endpoint for Docker / orchestration liveness probes."""
+    db_ok = False
+    try:
+        with pipeline.get_db_cursor(commit=False) as cur:
+            cur.execute("SELECT 1")
+            db_ok = bool(cur.fetchone())
+    except Exception:
+        db_ok = False
+    return {"status": "ok", "database_connected": db_ok}
 
 
 @app.post("/process")
@@ -113,19 +129,15 @@ async def status(job_id: str):
 
 
 @app.get("/stats")
-async def stats():
-    """Real proof the pipeline is persisting data — queries Postgres directly."""
-    import psycopg2
+def stats():
+    """Queries Postgres using the connection pool to get current KB statistics."""
     try:
-        conn = psycopg2.connect(**pipeline.DB_CONFIG)
-        cur = conn.cursor()
-        cur.execute("SELECT COUNT(*), COUNT(DISTINCT source_file) FROM transcript_chunks")
-        total_chunks, total_files = cur.fetchone()
-        cur.close()
-        conn.close()
-        return {"total_chunks": total_chunks, "total_files": total_files}
+        with pipeline.get_db_cursor(commit=False) as cur:
+            pipeline.ensure_table(cur)
+            cur.execute("SELECT COUNT(*), COUNT(DISTINCT source_file) FROM transcript_chunks")
+            total_chunks, total_files = cur.fetchone()
+            return {"total_chunks": total_chunks or 0, "total_files": total_files or 0}
     except Exception:
-        # Table may not exist yet if nothing has been processed
         return {"total_chunks": 0, "total_files": 0}
 
 
@@ -135,7 +147,11 @@ class SearchRequest(BaseModel):
 
 
 @app.post("/search")
-async def search(req: SearchRequest):
+def search(req: SearchRequest):
+    """
+    Standard synchronous def so FastAPI executes CPU-bound PyTorch embeddings
+    and DB queries in an AnyIO worker thread without freezing the async event loop.
+    """
     try:
         results = pipeline.search_kb(req.query, req.top_k)
         return {"results": results}
@@ -143,7 +159,7 @@ async def search(req: SearchRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Serve the frontend
+# Serve the frontend static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 

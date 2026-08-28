@@ -1,0 +1,75 @@
+services:
+  # 1. Vector Database: PostgreSQL with pgvector extension
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: whisper_vector_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${PGDATABASE:-transcripts_agile}
+      POSTGRES_USER: ${PGUSER:-postgres}
+      POSTGRES_PASSWORD: ${PGPASSWORD:-postgres}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5433:5432" # Exposed on host port 5433 to prevent collision with other Postgres instances
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER:-postgres} -d ${PGDATABASE:-transcripts_agile}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - whisper_net
+
+  # 2. Database UI: pgAdmin 4 connected to pgvector
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: whisper_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@signal.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    volumes:
+      - ./servers.json:/pgadmin4/servers.json:ro
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      - "5050:80"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - whisper_net
+
+  # 3. Application: FastAPI + Whisper + SentenceTransformers Pipeline
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: whisper_app
+    restart: unless-stopped
+    environment:
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      PGHOST: db
+      PGPORT: 5432
+      PGDATABASE: ${PGDATABASE:-transcripts_agile}
+      PGUSER: ${PGUSER:-postgres}
+      PGPASSWORD: ${PGPASSWORD:-postgres}
+    volumes:
+      - ./uploads:/app/uploads
+      - model_cache:/root/.cache
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - whisper_net
+
+volumes:
+  pgdata:
+  pgadmin_data:
+  model_cache:
+
+networks:
+  whisper_net:
+    driver: bridge
