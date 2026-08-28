@@ -5,7 +5,7 @@ Run:
     uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 Env vars required:
-    OPENROUTER_API_KEY
+    GROQ_API_KEY
     PGDATABASE, PGUSER, PGPASSWORD, PGHOST, PGPORT
 """
 

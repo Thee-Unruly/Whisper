@@ -1,6 +1,7 @@
 """
 Core pipeline logic: transcribe -> chunk -> correct -> embed -> store/search.
 Importable by the FastAPI app (no CLI/argparse here).
+Uses Groq LLM for fast transcript correction.
 """
 
 import os
@@ -19,7 +20,7 @@ os.environ.setdefault(
     os.path.join(tempfile.gettempdir(), "numba_cache"),
 )
 
-# ---- CONFIG ----
+# ---- DATABASE CONFIG ----
 DB_CONFIG = {
     "dbname": os.environ.get("PGDATABASE", "transcripts_agile"),
     "user": os.environ.get("PGUSER", "postgres"),
@@ -30,9 +31,10 @@ DB_CONFIG = {
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 EMBEDDING_DIM = 384
 
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
-OPENROUTER_MODEL = "openai/gpt-oss-120b:free"
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+# ---- LLM CONFIG (Groq) ----
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 CORRECTION_SYSTEM_PROMPT = (
     "You are correcting a raw speech-to-text transcript chunk. "
@@ -46,6 +48,19 @@ CORRECTION_SYSTEM_PROMPT = (
 _whisper_models = {}
 _embedding_model = None
 _db_pool = None
+
+
+def get_llm_config():
+    """Returns active Groq LLM config if GROQ_API_KEY is configured."""
+    groq_key = os.environ.get("GROQ_API_KEY") or GROQ_API_KEY
+    if groq_key:
+        return {
+            "provider": "Groq",
+            "url": GROQ_URL,
+            "key": groq_key,
+            "model": os.environ.get("GROQ_MODEL", GROQ_MODEL),
+        }
+    return None
 
 
 def get_db_pool():
@@ -125,23 +140,26 @@ def chunk_segments(segments, chunk_seconds: float = 30.0):
 
 def correct_chunk_text(text: str) -> str:
     import requests
-
-    if not OPENROUTER_API_KEY:
+    llm = get_llm_config()
+    if not llm:
         return text
 
     try:
         response = requests.post(
-            OPENROUTER_URL,
-            headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
+            llm["url"],
+            headers={
+                "Authorization": f"Bearer {llm['key']}",
+                "Content-Type": "application/json",
+            },
             json={
-                "model": OPENROUTER_MODEL,
+                "model": llm["model"],
                 "messages": [
                     {"role": "system", "content": CORRECTION_SYSTEM_PROMPT},
                     {"role": "user", "content": text},
                 ],
                 "temperature": 0.2,
             },
-            timeout=60,
+            timeout=30,
         )
 
         if response.status_code != 200:
@@ -157,16 +175,17 @@ def correct_chunks(chunks, progress_cb=None, max_workers=6):
     if not chunks:
         return chunks
 
-    if not OPENROUTER_API_KEY:
+    llm = get_llm_config()
+    if not llm:
         if progress_cb:
-            progress_cb("Skipping LLM correction: OPENROUTER_API_KEY not provided.")
+            progress_cb("Skipping LLM correction: No GROQ_API_KEY found.")
         for chunk in chunks:
             chunk["text_raw"] = chunk["text"]
         return chunks
 
     total = len(chunks)
     if progress_cb:
-        progress_cb(f"Correcting {total} chunks concurrently (up to {max_workers} threads)...")
+        progress_cb(f"Correcting {total} chunks via {llm['provider']} ({llm['model']})...")
 
     def _correct_single(item):
         idx, chunk = item
@@ -181,7 +200,7 @@ def correct_chunks(chunks, progress_cb=None, max_workers=6):
         for f in as_completed(futures):
             completed += 1
             if progress_cb:
-                progress_cb(f"Corrected chunk {completed}/{total}")
+                progress_cb(f"[{completed}/{total}] Corrected via {llm['provider']}")
 
     return chunks
 
@@ -218,10 +237,10 @@ def ensure_table(cur):
         );
     """)
     
-    # Create HNSW index for ultra-fast approximate nearest neighbor vector search
+    # Create HNSW index for ultra-fast approximate nearest neighbor cosine vector search
     cur.execute("""
         CREATE INDEX IF NOT EXISTS transcript_chunks_embedding_hnsw_idx 
-        ON transcript_chunks USING hnsw (embedding vector_l2_ops);
+        ON transcript_chunks USING hnsw (embedding vector_cosine_ops);
     """)
 
 
@@ -283,9 +302,9 @@ def search_kb(query: str, top_k: int = 5):
         cur.execute(
             """
             SELECT source_file, start_time, end_time, text,
-                   embedding <-> %s::vector AS distance
+                   embedding <=> %s::vector AS distance
             FROM transcript_chunks
-            ORDER BY embedding <-> %s::vector
+            ORDER BY embedding <=> %s::vector
             LIMIT %s
             """,
             (_vector_literal(query_embedding), _vector_literal(query_embedding), top_k),

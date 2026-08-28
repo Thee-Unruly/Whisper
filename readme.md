@@ -66,7 +66,8 @@ cp .env.example .env
 Then edit `.env` with your real values:
 
 ```
-OPENROUTER_API_KEY=sk-or-...
+GROQ_API_KEY=gsk_...
+GROQ_MODEL=llama-3.1-8b-instant
 PGDATABASE=your_db
 PGUSER=your_user
 PGPASSWORD=your_password
@@ -224,7 +225,7 @@ This is solid for local/internal use. Before putting it on the open internet:
   actual frontend origin.
 - **No upload validation** — file size/type isn't checked before processing
   starts.
-- **Correction step costs money per chunk** — one OpenRouter call per chunk.
+- **Correction step costs tokens per chunk** — one Groq LLM call per chunk.
   A long recording with a 30s chunk size can mean dozens of API calls; batch
   multiple chunks per call if this becomes a cost/speed issue.
 
@@ -233,7 +234,7 @@ This is solid for local/internal use. Before putting it on the open internet:
 ## Tech stack
 
 - **Transcription**: [OpenAI Whisper](https://github.com/openai/whisper) (local)
-- **Correction**: any model via [OpenRouter](https://openrouter.ai) (default: `anthropic/claude-3.5-sonnet`)
+- **Correction**: [Groq](https://groq.com) (default: `llama-3.1-8b-instant`)
 - **Embeddings**: [sentence-transformers](https://www.sbert.net/) `all-MiniLM-L6-v2` (local, 384-dim)
 - **Storage/search**: PostgreSQL + [pgvector](https://github.com/pgvector/pgvector)
 - **Backend**: FastAPI

@@ -13,7 +13,7 @@ services:
     ports:
       - "5433:5432" # Exposed on host port 5433 to prevent collision with other Postgres instances
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${PGUSER:-postgres} -d ${PGDATABASE:-transcripts_agile}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${PGUSER:-postgres} -d ${PGDATABASE:-transcripts_agile}" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -48,7 +48,8 @@ services:
     container_name: whisper_app
     restart: unless-stopped
     environment:
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-llama-3.1-8b-instant}
       PGHOST: db
       PGPORT: 5432
       PGDATABASE: ${PGDATABASE:-transcripts_agile}
