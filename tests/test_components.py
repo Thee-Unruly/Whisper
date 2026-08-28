@@ -1,13 +1,14 @@
 """
 Unit and integration tests for Signal Level 1 architecture.
-Tests rate limiting, chunking, and database atomic helpers.
+Tests rate limiting, chunking, embeddings, and database atomic helpers.
 """
 
 import asyncio
 import time
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import db
 import pipeline
 import workers
 from workers import AsyncTokenBucket
@@ -64,6 +65,47 @@ class TestChunkingLogic(unittest.TestCase):
         self.assertGreaterEqual(len(chunks), 2)
         self.assertEqual(chunks[0]["start"], 0.0)
         self.assertEqual(chunks[0]["text"], "Hello world this is a test of transcript chunking")
+
+    def test_empty_segments(self):
+        chunks = pipeline.chunk_segments([], chunk_seconds=30.0)
+        self.assertEqual(chunks, [])
+
+
+class TestEmbeddingLogic(unittest.TestCase):
+    def test_embed_texts_output_dimensions(self):
+        texts = ["This is a test sentence for vector search.", "Another sample chunk."]
+        embeddings = pipeline.embed_texts(texts)
+        self.assertEqual(len(embeddings), 2)
+        # Verify 384 dimensions for all-MiniLM-L6-v2
+        self.assertEqual(len(embeddings[0]), 384)
+        self.assertEqual(len(embeddings[1]), 384)
+        self.assertIsInstance(embeddings[0][0], float)
+
+
+class TestGroqCorrection(unittest.TestCase):
+    def test_async_correct_text_fallback_on_error(self):
+        async def run_fallback():
+            mock_client = MagicMock()
+            mock_client.post = AsyncMock(side_effect=Exception("Network down"))
+            
+            raw_text = "raw transcript with typo"
+            res = await pipeline.async_correct_text(
+                mock_client,
+                raw_text,
+                api_key="gsk_test",
+                max_retries=1
+            )
+            # Should safely fallback to original text
+            self.assertEqual(res, raw_text)
+
+        asyncio.run(run_fallback())
+
+
+class TestDBFormatting(unittest.TestCase):
+    def test_vector_literal_formatting(self):
+        vec = [0.123, -0.456, 0.789]
+        formatted = db._vector_literal(vec)
+        self.assertEqual(formatted, "[0.123,-0.456,0.789]")
 
 
 if __name__ == "__main__":
