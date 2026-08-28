@@ -46,6 +46,7 @@ async def lifespan(app: FastAPI):
     asr_task = asyncio.create_task(workers.asr_stage_worker())
     groq_task = asyncio.create_task(workers.groq_stage_worker())
     embed_task = asyncio.create_task(workers.embedding_stage_worker())
+    synth_task = asyncio.create_task(workers.synthesis_stage_worker())
 
     yield
 
@@ -53,6 +54,7 @@ async def lifespan(app: FastAPI):
     asr_task.cancel()
     groq_task.cancel()
     embed_task.cancel()
+    synth_task.cancel()
 
 
 app = FastAPI(title="Signal — Transcript Knowledge Base", lifespan=lifespan)

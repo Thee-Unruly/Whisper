@@ -509,6 +509,11 @@
                     <div class="status-line" id="jobStatus"><span class="status-dot"></span><span
                             id="jobStatusText"></span></div>
                     <div class="tape-counter" id="log"></div>
+
+                    <div class="synthesis-box" id="synthesisBox" style="display:none; margin-top:14px; padding:12px; background:var(--panel-raised); border:1px solid var(--amber-dim); border-radius:var(--radius);">
+                        <div style="font-family:'Space Grotesk', sans-serif; font-size:12px; font-weight:600; color:var(--amber); margin-bottom:6px; letter-spacing:0.05em; text-transform:uppercase;">⚡ Executive Synthesis & Key Decisions</div>
+                        <div id="synthesisContent" style="font-size:12px; line-height:1.6; color:var(--text); white-space:pre-wrap; max-height:220px; overflow-y:auto;"></div>
+                    </div>
                 </div>
             </div>
 
@@ -571,6 +576,8 @@
             btn.classList.add("recording");
             logEl.classList.add("visible");
             logEl.innerHTML = "";
+            const synthBox = document.getElementById("synthesisBox");
+            if (synthBox) synthBox.style.display = "none";
             statusEl.className = "status-line visible status-running";
             statusText.textContent = "uploading...";
             headerEq.classList.add("active");
@@ -612,6 +619,18 @@
                     statusText.textContent = `done — ${job.result.chunks_saved} chunks saved`;
                     resetBtn(btn, headerEq);
                     loadStats();
+
+                    if (job.summary || job.action_items) {
+                        const synthBox = document.getElementById("synthesisBox");
+                        const synthContent = document.getElementById("synthesisContent");
+                        if (synthBox && synthContent) {
+                            synthBox.style.display = "block";
+                            let text = "";
+                            if (job.summary) text += `${job.summary.trim()}\n\n`;
+                            if (job.action_items) text += `${job.action_items.trim()}`;
+                            synthContent.textContent = text.trim();
+                        }
+                    }
                 } else if (job.status === "error") {
                     clearInterval(interval);
                     statusEl.className = "status-line visible status-error";

@@ -100,6 +100,58 @@ class TestGroqCorrection(unittest.TestCase):
 
         asyncio.run(run_fallback())
 
+    def test_async_correct_text_context_aware_stitching(self):
+        async def run_context():
+            mock_client = MagicMock()
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = {
+                "choices": [{"message": {"content": "We discussed the budget."}}]
+            }
+            mock_client.post = AsyncMock(return_value=mock_resp)
+
+            prev_ctx = "In the previous meeting"
+            res = await pipeline.async_correct_text(
+                mock_client,
+                text="we discussed the budget",
+                prev_context=prev_ctx,
+                api_key="gsk_test"
+            )
+            self.assertEqual(res, "We discussed the budget.")
+            
+            # Verify payload included previous context
+            call_args = mock_client.post.call_args
+            payload = call_args[1]["json"]
+            user_msg = payload["messages"][1]["content"]
+            self.assertIn("PREVIOUS CHUNK CONTEXT", user_msg)
+            self.assertIn(prev_ctx, user_msg)
+
+        asyncio.run(run_context())
+
+    def test_summary_synthesis_parsing(self):
+        async def run_synth():
+            mock_client = MagicMock()
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = {
+                "choices": [{
+                    "message": {
+                        "content": "## Executive Summary\nThe team discussed Q3 goals.\n\n## Key Decisions & Action Items\n- John to finish deployment by Friday."
+                    }
+                }]
+            }
+            mock_client.post = AsyncMock(return_value=mock_resp)
+
+            synth = await pipeline.async_generate_summary_and_action_items(
+                mock_client,
+                full_transcript="Full meeting transcript text...",
+                api_key="gsk_test"
+            )
+            self.assertIn("The team discussed Q3 goals.", synth["summary"])
+            self.assertIn("John to finish deployment by Friday.", synth["action_items"])
+
+        asyncio.run(run_synth())
+
 
 class TestDBFormatting(unittest.TestCase):
     def test_vector_literal_formatting(self):

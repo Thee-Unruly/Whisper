@@ -108,9 +108,17 @@ def init_db():
                 total_chunks INT DEFAULT NULL,
                 processed_chunks INT NOT NULL DEFAULT 0,
                 error_message TEXT,
+                summary TEXT,
+                action_items TEXT,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             );
+        """)
+
+        # Migration safe check if columns exist on older tables
+        cur.execute("""
+            ALTER TABLE jobs ADD COLUMN IF NOT EXISTS summary TEXT;
+            ALTER TABLE jobs ADD COLUMN IF NOT EXISTS action_items TEXT;
         """)
 
         # 4. Create transcript_chunks table
@@ -253,7 +261,8 @@ def save_raw_chunks(job_id: str, source_filename: str, chunks: List[Dict[str, An
 
 def claim_raw_chunks(batch_size: int = 10) -> List[Dict[str, Any]]:
     """
-    Claims up to `batch_size` raw chunks for Groq correction using SKIP LOCKED.
+    Claims up to `batch_size` raw chunks for Groq correction using SKIP LOCKED,
+    fetching the preceding chunk's text for context-aware stitching.
     """
     with get_db_cursor(commit=True) as cur:
         cur.execute(
@@ -265,12 +274,17 @@ def claim_raw_chunks(batch_size: int = 10) -> List[Dict[str, Any]]:
                 FOR UPDATE SKIP LOCKED
                 LIMIT %s
             )
-            UPDATE transcript_chunks
+            UPDATE transcript_chunks tc
             SET status = 'correcting', updated_at = NOW()
             FROM to_claim
-            WHERE transcript_chunks.id = to_claim.id
-            RETURNING transcript_chunks.id, transcript_chunks.job_id, 
-                      transcript_chunks.chunk_index, transcript_chunks.text_raw;
+            WHERE tc.id = to_claim.id
+            RETURNING tc.id, tc.job_id, tc.chunk_index, tc.text_raw,
+                      (
+                          SELECT COALESCE(prev.text_corrected, prev.text_raw, prev.text)
+                          FROM transcript_chunks prev
+                          WHERE prev.job_id = tc.job_id AND prev.chunk_index = tc.chunk_index - 1
+                          LIMIT 1
+                      ) AS prev_text;
             """,
             (batch_size,)
         )
@@ -281,6 +295,7 @@ def claim_raw_chunks(batch_size: int = 10) -> List[Dict[str, Any]]:
                 "job_id": str(r[1]),
                 "chunk_index": r[2],
                 "text_raw": r[3],
+                "prev_text": r[4],
             }
             for r in rows
         ]
@@ -410,13 +425,42 @@ def fail_job(job_id: str, error_message: str):
         )
 
 
+def get_full_job_transcript(job_id: str) -> str:
+    """Returns the concatenated clean transcript for the entire job."""
+    with get_db_cursor(commit=False) as cur:
+        cur.execute(
+            """
+            SELECT COALESCE(text_corrected, text_raw, text)
+            FROM transcript_chunks
+            WHERE job_id = %s
+            ORDER BY chunk_index ASC;
+            """,
+            (job_id,)
+        )
+        rows = cur.fetchall()
+        return "\n\n".join(r[0] for r in rows if r[0])
+
+
+def save_job_summary(job_id: str, summary: str, action_items: str):
+    """Saves the executive summary and key action items for a completed job."""
+    with get_db_cursor(commit=True) as cur:
+        cur.execute(
+            """
+            UPDATE jobs
+            SET summary = %s, action_items = %s, updated_at = NOW()
+            WHERE id = %s;
+            """,
+            (summary, action_items, job_id)
+        )
+
+
 def get_job_status(job_id: str) -> Optional[Dict[str, Any]]:
-    """Retrieves full job status and progress formatted for API responses."""
+    """Retrieves full job status, summary, and progress formatted for API responses."""
     with get_db_cursor(commit=False) as cur:
         cur.execute(
             """
             SELECT id, source_filename, model_name, status, total_chunks, 
-                   processed_chunks, error_message, created_at, updated_at
+                   processed_chunks, error_message, summary, action_items, created_at, updated_at
             FROM jobs
             WHERE id = %s;
             """,
@@ -430,6 +474,8 @@ def get_job_status(job_id: str) -> Optional[Dict[str, Any]]:
         total = row[4]
         processed = row[5]
         error = row[6]
+        summary = row[7]
+        action_items = row[8]
 
         # Map to frontend expectations
         if status_str == "completed":
@@ -447,6 +493,8 @@ def get_job_status(job_id: str) -> Optional[Dict[str, Any]]:
         ]
         if total is not None:
             messages.append(f"Progress: {processed}/{total} chunks processed")
+        if summary:
+            messages.append("Executive synthesis & action items generated")
         if error:
             messages.append(f"Error: {error}")
 
@@ -457,8 +505,14 @@ def get_job_status(job_id: str) -> Optional[Dict[str, Any]]:
             "raw_status": status_str,
             "total_chunks": total,
             "processed_chunks": processed,
+            "summary": summary,
+            "action_items": action_items,
             "messages": messages,
-            "result": {"chunks_saved": processed},
+            "result": {
+                "chunks_saved": processed,
+                "summary": summary,
+                "action_items": action_items,
+            },
             "error": error,
         }
 

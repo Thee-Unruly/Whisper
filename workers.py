@@ -127,9 +127,14 @@ async def groq_stage_worker(rate_limit_per_minute: float = 30.0, poll_interval: 
                 async def _process_chunk(chunk):
                     chunk_id = chunk["id"]
                     text_raw = chunk["text_raw"]
+                    prev_text = chunk.get("prev_text")
                     try:
                         await limiter.acquire()
-                        corrected = await pipeline.async_correct_text(client, text_raw)
+                        corrected = await pipeline.async_correct_text(
+                            client, 
+                            text=text_raw, 
+                            prev_context=prev_text
+                        )
                         db.save_corrected_chunk(chunk_id, corrected)
                     except Exception as exc:
                         logger.warning(f"[Stage 2 Groq] Failed chunk {chunk_id[:8]}: {exc}")
@@ -182,23 +187,67 @@ async def embedding_stage_worker(batch_size: int = 32, poll_interval: float = 0.
 
 
 # ==========================================
+# Stage 4: Executive Synthesis & Action Items Worker Loop
+# ==========================================
+
+async def synthesis_stage_worker(poll_interval: float = 1.0):
+    """
+    Stage 4 (Synthesis): Automatically generates Executive Summary and Action Items
+    for completed jobs once all chunks have been indexed.
+    """
+    logger.info("Starting Stage 4 Executive Synthesis Worker Loop...")
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        while True:
+            try:
+                # Find a completed job that hasn't had synthesis generated yet
+                job_id = None
+                with db.get_db_cursor(commit=False) as cur:
+                    cur.execute("""
+                        SELECT id FROM jobs 
+                        WHERE status = 'completed' AND summary IS NULL 
+                        LIMIT 1;
+                    """)
+                    row = cur.fetchone()
+                    if row:
+                        job_id = str(row[0])
+
+                if not job_id:
+                    await asyncio.sleep(poll_interval)
+                    continue
+
+                full_transcript = db.get_full_job_transcript(job_id)
+                if full_transcript.strip():
+                    logger.info(f"[Stage 4 Synthesis] Generating Executive Summary for job {job_id[:8]}...")
+                    synth = await pipeline.async_generate_summary_and_action_items(client, full_transcript)
+                    db.save_job_summary(job_id, synth["summary"], synth["action_items"])
+                    logger.info(f"[Stage 4 Synthesis] Summary & Action Items saved for job {job_id[:8]}.")
+                else:
+                    db.save_job_summary(job_id, "No transcript available.", "")
+
+            except Exception as e:
+                logger.error(f"[Stage 4 Synthesis Loop Error]: {e}", exc_info=True)
+                await asyncio.sleep(poll_interval)
+
+
+# ==========================================
 # Master Runner & Standalone Entrypoint
 # ==========================================
 
 async def run_all_workers():
-    """Runs all 3 stage worker loops concurrently inside the current process."""
+    """Runs all 4 stage worker loops concurrently inside the current process."""
     db.init_db()
     await asyncio.gather(
         asr_stage_worker(),
         groq_stage_worker(),
         embedding_stage_worker(),
+        synthesis_stage_worker(),
     )
 
 
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Signal Pipeline Stage Workers")
-    parser.add_argument("--stage", choices=["all", "asr", "groq", "embed"], default="all",
+    parser.add_argument("--stage", choices=["all", "asr", "groq", "embed", "synthesis"], default="all",
                         help="Select which stage worker loop to run")
     args = parser.parse_args()
 
@@ -209,5 +258,7 @@ if __name__ == "__main__":
         asyncio.run(groq_stage_worker())
     elif args.stage == "embed":
         asyncio.run(embedding_stage_worker())
+    elif args.stage == "synthesis":
+        asyncio.run(synthesis_stage_worker())
     else:
         asyncio.run(run_all_workers())

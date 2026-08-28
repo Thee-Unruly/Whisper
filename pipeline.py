@@ -32,11 +32,25 @@ GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 CORRECTION_SYSTEM_PROMPT = (
-    "You are correcting a raw speech-to-text transcript chunk. "
-    "Fix grammar, punctuation, obvious mis-transcribed words, and sentence "
-    "boundaries by reasoning about what was most likely actually said. "
-    "Do NOT change the meaning, do NOT add information, do NOT summarize. "
-    "Return ONLY the corrected text, with no preamble, labels, or commentary."
+    "You are an expert transcript editor and thought-structuring assistant. "
+    "Your objective is to transform raw spoken audio chunks into clean, coherent, and well-structured written text.\n\n"
+    "Rules:\n"
+    "1. Remove verbal fillers (e.g., 'um', 'uh', 'like', 'you know', 'sort of', stuttering, false starts).\n"
+    "2. Correct speech-to-text phonetic mis-transcriptions, grammar, punctuation, and capitalization.\n"
+    "3. Align conversational wandering into concise, logically coherent sentences.\n"
+    "4. Maintain absolute factual fidelity: do NOT hallucinate facts, omit technical terms, or alter speaker intent.\n"
+    "5. Use the provided PREVIOUS CONTEXT (if available) to ensure seamless continuity across sentence and thought boundaries.\n"
+    "6. Return ONLY the final polished text with no introduction, explanations, or quotes."
+)
+
+SUMMARY_SYSTEM_PROMPT = (
+    "You are an executive synthesis assistant. Analyze the full clean meeting/audio transcript provided "
+    "and generate two structured sections:\n\n"
+    "## Executive Summary\n"
+    "A concise 2-3 paragraph synthesis summarizing the core topics, perspectives, and main outcomes discussed.\n\n"
+    "## Key Decisions & Action Items\n"
+    "A clear bulleted list of decisions made, identified next steps, and action items with owners if mentioned.\n\n"
+    "Format in clean markdown. Do not include introductory conversational filler."
 )
 
 _whisper_models = {}
@@ -126,18 +140,24 @@ def chunk_segments(segments: List[Dict[str, Any]], chunk_seconds: float = 30.0) 
 async def async_correct_text(
     client,
     text: str,
+    prev_context: Optional[str] = None,
     api_key: Optional[str] = None,
     model: Optional[str] = None,
     max_retries: int = 3
 ) -> str:
     """
-    Stage 2: Async Groq LLM correction pass with rate-limit & backoff header handling.
+    Stage 2: Async Groq LLM correction and thought-structuring pass
+    with context-aware stitching and backoff handling.
     """
     key = api_key or os.environ.get("GROQ_API_KEY") or GROQ_API_KEY
     if not key:
         return text  # Fallback to raw text if no key provided
 
     model_name = model or os.environ.get("GROQ_MODEL") or GROQ_MODEL
+
+    user_prompt = text
+    if prev_context:
+        user_prompt = f"PREVIOUS CHUNK CONTEXT (for continuity only):\n\"{prev_context}\"\n\nCURRENT SPOKEN RAW CHUNK TO EDIT AND STRUCTURE:\n\"{text}\""
 
     headers = {
         "Authorization": f"Bearer {key}",
@@ -147,7 +167,7 @@ async def async_correct_text(
         "model": model_name,
         "messages": [
             {"role": "system", "content": CORRECTION_SYSTEM_PROMPT},
-            {"role": "user", "content": text},
+            {"role": "user", "content": user_prompt},
         ],
         "temperature": 0.2,
     }
@@ -161,7 +181,6 @@ async def async_correct_text(
                 return data["choices"][0]["message"]["content"].strip()
 
             elif resp.status_code == 429:
-                # Dynamic backoff obeying Groq headers
                 retry_after_str = resp.headers.get("retry-after")
                 sleep_duration = float(retry_after_str) if retry_after_str else (1.5 * (2 ** attempt) + 0.2)
                 logger.warning(f"Groq rate limit hit (429). Backing off for {sleep_duration:.2f}s...")
@@ -173,7 +192,67 @@ async def async_correct_text(
             logger.warning(f"Exception during Groq request attempt {attempt + 1}: {e}")
             await asyncio.sleep(1.0)
 
-    return text  # Fallback to raw text on persistent failure
+    return text
+
+
+async def async_generate_summary_and_action_items(
+    client,
+    full_transcript: str,
+    api_key: Optional[str] = None,
+    model: Optional[str] = None,
+    max_retries: int = 3
+) -> Dict[str, str]:
+    """
+    Job-Level Synthesis: Generates Executive Summary and Action Items from the full transcript.
+    """
+    if not full_transcript.strip():
+        return {"summary": "", "action_items": ""}
+
+    key = api_key or os.environ.get("GROQ_API_KEY") or GROQ_API_KEY
+    if not key:
+        return {"summary": "", "action_items": ""}
+
+    model_name = model or os.environ.get("GROQ_MODEL") or GROQ_MODEL
+
+    headers = {
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": model_name,
+        "messages": [
+            {"role": "system", "content": SUMMARY_SYSTEM_PROMPT},
+            {"role": "user", "content": f"Full Clean Transcript:\n\n{full_transcript[:25000]}"},
+        ],
+        "temperature": 0.3,
+    }
+
+    for attempt in range(max_retries):
+        try:
+            resp = await client.post(GROQ_URL, json=payload, headers=headers, timeout=45.0)
+            if resp.status_code == 200:
+                content = resp.json()["choices"][0]["message"]["content"].strip()
+                
+                # Split into Executive Summary and Action Items sections if formatted
+                summary_part = content
+                action_part = ""
+                if "## Key Decisions" in content or "## Action Items" in content:
+                    split_header = "## Key Decisions" if "## Key Decisions" in content else "## Action Items"
+                    parts = content.split(split_header, 1)
+                    summary_part = parts[0].replace("## Executive Summary", "").strip()
+                    action_part = f"{split_header}\n{parts[1]}".strip()
+                
+                return {
+                    "summary": summary_part,
+                    "action_items": action_part,
+                }
+            elif resp.status_code == 429:
+                await asyncio.sleep(2.0 * (attempt + 1))
+        except Exception as e:
+            logger.warning(f"Failed to generate summary on attempt {attempt + 1}: {e}")
+            await asyncio.sleep(1.0)
+
+    return {"summary": "", "action_items": ""}
 
 
 def embed_texts(texts: List[str]) -> List[List[float]]:
