@@ -1,90 +1,77 @@
 """
-FastAPI backend for the transcript KB pipeline.
+FastAPI backend for Signal Transcript Knowledge Base.
+Fully database-backed Level 1 architecture:
+  - Non-blocking staged async workers
+  - Resilient PostgreSQL job & chunk state machine
+  - Cosine vector search with pgvector
 
 Run:
     uvicorn main:app --reload --host 0.0.0.0 --port 8000
-
-Env vars required:
-    GROQ_API_KEY
-    PGDATABASE, PGUSER, PGPASSWORD, PGHOST, PGPORT
 """
 
 import os
 import shutil
 import uuid
-from datetime import datetime
+import asyncio
+import logging
+from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-load_dotenv()  # reads .env in the working directory before anything else runs
+load_dotenv()
 
-from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+import db
 import pipeline
+import workers
 
-app = FastAPI(title="Signal — Transcript Knowledge Base")
+logger = logging.getLogger("signal.api")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s")
+
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initializes DB schema and launches concurrent in-process background worker loops."""
+    logger.info("Initializing database schema and indices...")
+    db.init_db()
+
+    logger.info("Spawning in-process Level 1 stage worker tasks...")
+    asr_task = asyncio.create_task(workers.asr_stage_worker())
+    groq_task = asyncio.create_task(workers.groq_stage_worker())
+    embed_task = asyncio.create_task(workers.embedding_stage_worker())
+
+    yield
+
+    logger.info("Shutting down background stage workers...")
+    asr_task.cancel()
+    groq_task.cancel()
+    embed_task.cancel()
+
+
+app = FastAPI(title="Signal — Transcript Knowledge Base", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten this for strict production domains
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-# In-memory job store. For multi-worker / multi-container production, swap this
-# for Redis/DB-backed job tracking (e.g. Celery/ARQ/RQ).
-JOBS = {}
-
-
-def update_job(job_id: str, message: str, status: str = "running"):
-    if job_id in JOBS:
-        JOBS[job_id]["status"] = status
-        JOBS[job_id]["messages"].append(message)
-        JOBS[job_id]["updated_at"] = datetime.utcnow().isoformat()
-
-
-def run_pipeline_job(job_id: str, file_path: str, source_name: str,
-                      model_name: str, chunk_seconds: float, skip_correction: bool):
-    try:
-        def progress_cb(msg):
-            update_job(job_id, msg)
-
-        num_chunks = pipeline.process_file(
-            file_path=file_path,
-            source_name=source_name,
-            model_name=model_name,
-            chunk_seconds=chunk_seconds,
-            skip_correction=skip_correction,
-            progress_cb=progress_cb,
-        )
-        if job_id in JOBS:
-            JOBS[job_id]["status"] = "complete"
-            JOBS[job_id]["result"] = {"chunks_saved": num_chunks}
-    except Exception as e:
-        if job_id in JOBS:
-            JOBS[job_id]["status"] = "error"
-            JOBS[job_id]["error"] = str(e)
-    finally:
-        if os.path.exists(file_path):
-            try:
-                os.remove(file_path)
-            except OSError:
-                pass
-
 
 @app.get("/health")
 def health():
-    """Healthcheck endpoint for Docker / orchestration liveness probes."""
+    """Healthcheck endpoint for container probes."""
     db_ok = False
     try:
-        with pipeline.get_db_cursor(commit=False) as cur:
+        with db.get_db_cursor(commit=False) as cur:
             cur.execute("SELECT 1")
             db_ok = bool(cur.fetchone())
     except Exception:
@@ -94,51 +81,45 @@ def health():
 
 @app.post("/process")
 async def process(
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     model: str = Form("base"),
     chunk_seconds: float = Form(30.0),
     skip_correction: bool = Form(False),
 ):
-    job_id = str(uuid.uuid4())
-    saved_path = os.path.join(UPLOAD_DIR, f"{job_id}_{file.filename}")
+    """
+    Accepts an audio/video upload, stores it in staging, creates a 'queued'
+    job record in PostgreSQL, and returns the job_id immediately.
+    """
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Filename missing")
 
-    with open(saved_path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+    temp_id = uuid.uuid4().hex[:8]
+    sanitized_filename = f"{temp_id}_{file.filename}"
+    dest_path = os.path.join(UPLOAD_DIR, sanitized_filename)
 
-    JOBS[job_id] = {
-        "status": "queued",
-        "messages": [],
-        "created_at": datetime.utcnow().isoformat(),
-        "source_file": file.filename,
-    }
+    with open(dest_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
 
-    background_tasks.add_task(
-        run_pipeline_job, job_id, saved_path, file.filename, model, chunk_seconds, skip_correction
+    # Persist queued job in PostgreSQL
+    job_id = db.create_job(
+        source_filename=file.filename,
+        file_path=dest_path,
+        model_name=model,
+        chunk_seconds=chunk_seconds,
+        skip_correction=skip_correction,
     )
 
+    logger.info(f"Enqueued job {job_id[:8]} for '{file.filename}' (model={model}, skip_corr={skip_correction})")
     return {"job_id": job_id}
 
 
 @app.get("/status/{job_id}")
-async def status(job_id: str):
-    job = JOBS.get(job_id)
-    if not job:
+def status(job_id: str):
+    """Returns the live state and progress of a pipeline job from PostgreSQL."""
+    job_info = db.get_job_status(job_id)
+    if not job_info:
         raise HTTPException(status_code=404, detail="Job not found")
-    return job
-
-
-@app.get("/stats")
-def stats():
-    """Queries Postgres using the connection pool to get current KB statistics."""
-    try:
-        with pipeline.get_db_cursor(commit=False) as cur:
-            pipeline.ensure_table(cur)
-            cur.execute("SELECT COUNT(*), COUNT(DISTINCT source_file) FROM transcript_chunks")
-            total_chunks, total_files = cur.fetchone()
-            return {"total_chunks": total_chunks or 0, "total_files": total_files or 0}
-    except Exception:
-        return {"total_chunks": 0, "total_files": 0}
+    return job_info
 
 
 class SearchRequest(BaseModel):
@@ -148,21 +129,27 @@ class SearchRequest(BaseModel):
 
 @app.post("/search")
 def search(req: SearchRequest):
-    """
-    Standard synchronous def so FastAPI executes CPU-bound PyTorch embeddings
-    and DB queries in an AnyIO worker thread without freezing the async event loop.
-    """
+    """Semantic vector search using cosine distance (<=>)."""
+    if not req.query.strip():
+        return {"results": []}
     try:
-        results = pipeline.search_kb(req.query, req.top_k)
+        results = pipeline.search_kb(query=req.query, top_k=req.top_k)
         return {"results": results}
     except Exception as e:
+        logger.error(f"Search query failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Serve the frontend static files
+@app.get("/stats")
+def stats():
+    """Returns database chunk and file counts."""
+    return db.get_stats()
+
+
+# Serve static frontend
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 @app.get("/")
-async def index():
+def read_root():
     return FileResponse("static/index.html")
