@@ -40,7 +40,7 @@ def get_llm_config(api_key: Optional[str] = None, model: Optional[str] = None) -
     if explicit_key.startswith("gsk_") or (not explicit_key and groq_key):
         key = explicit_key or groq_key
         url = "https://api.groq.com/openai/v1/chat/completions"
-        default_model = os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
+        default_model = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
         provider = "Groq"
     elif explicit_key.startswith("sk-or-") or (not explicit_key and openrouter_key):
         key = explicit_key or openrouter_key
@@ -52,7 +52,7 @@ def get_llm_config(api_key: Optional[str] = None, model: Optional[str] = None) -
         # Fallback default
         key = explicit_key or groq_key or openrouter_key
         url = "https://api.groq.com/openai/v1/chat/completions"
-        default_model = os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
+        default_model = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
         provider = "Groq"
 
     chosen_model = model or default_model
