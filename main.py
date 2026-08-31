@@ -68,6 +68,14 @@ app.add_middleware(
 )
 
 
+class DBConfigRequest(BaseModel):
+    host: str
+    port: int = 5432
+    dbname: str = "postgres"
+    user: str = "postgres"
+    password: str
+
+
 @app.get("/health")
 def health():
     """Healthcheck endpoint for container probes."""
@@ -78,7 +86,31 @@ def health():
             db_ok = bool(cur.fetchone())
     except Exception:
         db_ok = False
-    return {"status": "ok", "database_connected": db_ok}
+    return {"status": "ok", "database_connected": db_ok, "config": db.get_current_db_config()}
+
+
+@app.get("/api/db/config")
+def get_db_config():
+    """Returns current active database connection configuration."""
+    return db.get_current_db_config()
+
+
+@app.post("/api/db/test")
+def test_db_config(req: DBConfigRequest):
+    """Tests connection to a specified PostgreSQL or Supabase instance."""
+    ok, message = db.test_connection_params(req.dict())
+    if not ok:
+        raise HTTPException(status_code=400, detail=message)
+    return {"ok": True, "message": message}
+
+
+@app.post("/api/db/config")
+def set_db_config(req: DBConfigRequest):
+    """Dynamically switches the active database connection pool in runtime."""
+    ok, message = db.update_db_config(req.dict())
+    if not ok:
+        raise HTTPException(status_code=400, detail=message)
+    return {"ok": True, "message": message, "config": db.get_current_db_config()}
 
 
 @app.post("/process")
@@ -124,8 +156,32 @@ def status(job_id: str):
     return job_info
 
 
+@app.get("/api/jobs/{job_id}/transcript")
+def get_job_transcript(job_id: str):
+    """Returns full clean transcript and timestamped chunks for PDF / document export."""
+    job = db.get_job_status(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    chunks = db.get_job_chunks(job_id)
+    full_text = db.get_full_job_transcript(job_id)
+    return {
+        "job_id": job_id,
+        "source_filename": job["source_filename"],
+        "model_name": job.get("model_name", "base"),
+        "summary": job["summary"],
+        "action_items": job["action_items"],
+        "full_text": full_text,
+        "chunks": chunks
+    }
+
+
 class SearchRequest(BaseModel):
     query: str
+    top_k: int = 5
+
+
+class AskRequest(BaseModel):
+    question: str
     top_k: int = 5
 
 
@@ -139,6 +195,19 @@ def search(req: SearchRequest):
         return {"results": results}
     except Exception as e:
         logger.error(f"Search query failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/ask")
+async def ask(req: AskRequest):
+    """Answers user question using retrieved transcript chunks and Groq LLM synthesis."""
+    if not req.question.strip():
+        return {"answer": "Please provide a valid question.", "sources": []}
+    try:
+        response = await pipeline.ask_kb(query=req.question, top_k=req.top_k)
+        return response
+    except Exception as e:
+        logger.error(f"Q&A failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

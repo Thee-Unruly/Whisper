@@ -5,12 +5,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Signal — Neural Audio Knowledge Base & Intelligence Studio</title>
-    
+
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-    
+    <link
+        href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Space+Grotesk:wght@500;600;700&display=swap"
+        rel="stylesheet">
+
+    <!-- html2pdf.js for client-side PDF export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
     <style>
         :root {
             --bg-base: #06080D;
@@ -18,15 +23,15 @@
             --bg-card: rgba(14, 20, 32, 0.75);
             --bg-card-hover: rgba(20, 28, 45, 0.9);
             --bg-elevated: #151D2F;
-            
+
             --border-subtle: rgba(255, 255, 255, 0.08);
             --border-glow: rgba(0, 242, 254, 0.3);
             --border-glow-purple: rgba(121, 40, 202, 0.4);
-            
+
             --text-primary: #F8FAFC;
             --text-secondary: #94A3B8;
             --text-muted: #64748B;
-            
+
             --cyan: #00F2FE;
             --blue: #4FACFE;
             --purple: #7928CA;
@@ -34,11 +39,11 @@
             --emerald: #10B981;
             --amber: #F59E0B;
             --rose: #F43F5E;
-            
+
             --grad-cyan: linear-gradient(135deg, #00F2FE 0%, #4FACFE 100%);
             --grad-purple: linear-gradient(135deg, #7928CA 0%, #FF0080 100%);
             --grad-emerald: linear-gradient(135deg, #10B981 0%, #059669 100%);
-            
+
             --shadow-glow: 0 0 30px rgba(0, 242, 254, 0.18);
             --shadow-card: 0 12px 36px -4px rgba(0, 0, 0, 0.6);
             --radius-sm: 6px;
@@ -53,16 +58,18 @@
             padding: 0;
         }
 
-        html, body {
+        html,
+        body {
             height: 100vh;
             width: 100vw;
-            overflow: hidden; /* App fills entire viewport; decks scroll internally */
+            overflow: hidden;
+            /* App fills entire viewport; decks scroll internally */
             background-color: var(--bg-base);
             color: var(--text-primary);
             font-family: 'Plus Jakarta Sans', sans-serif;
             display: flex;
             flex-direction: column;
-            background-image: 
+            background-image:
                 radial-gradient(at 0% 0%, rgba(0, 242, 254, 0.09) 0px, transparent 55%),
                 radial-gradient(at 100% 0%, rgba(121, 40, 202, 0.11) 0px, transparent 55%),
                 radial-gradient(at 50% 100%, rgba(16, 185, 129, 0.06) 0px, transparent 55%);
@@ -74,13 +81,16 @@
             width: 6px;
             height: 6px;
         }
+
         ::-webkit-scrollbar-track {
             background: transparent;
         }
+
         ::-webkit-scrollbar-thumb {
             background: rgba(255, 255, 255, 0.14);
             border-radius: var(--radius-full);
         }
+
         ::-webkit-scrollbar-thumb:hover {
             background: rgba(255, 255, 255, 0.28);
         }
@@ -192,8 +202,17 @@
         }
 
         @keyframes pulseGlow {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.25); opacity: 0.6; }
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(1.25);
+                opacity: 0.6;
+            }
         }
 
         /* Soundwave animation in header */
@@ -212,15 +231,43 @@
             animation: soundwaveAnim 1.2s infinite ease-in-out;
         }
 
-        .soundwave span:nth-child(1) { animation-delay: 0.0s; height: 30%; }
-        .soundwave span:nth-child(2) { animation-delay: 0.2s; height: 80%; }
-        .soundwave span:nth-child(3) { animation-delay: 0.4s; height: 100%; }
-        .soundwave span:nth-child(4) { animation-delay: 0.1s; height: 60%; }
-        .soundwave span:nth-child(5) { animation-delay: 0.3s; height: 40%; }
+        .soundwave span:nth-child(1) {
+            animation-delay: 0.0s;
+            height: 30%;
+        }
+
+        .soundwave span:nth-child(2) {
+            animation-delay: 0.2s;
+            height: 80%;
+        }
+
+        .soundwave span:nth-child(3) {
+            animation-delay: 0.4s;
+            height: 100%;
+        }
+
+        .soundwave span:nth-child(4) {
+            animation-delay: 0.1s;
+            height: 60%;
+        }
+
+        .soundwave span:nth-child(5) {
+            animation-delay: 0.3s;
+            height: 40%;
+        }
 
         @keyframes soundwaveAnim {
-            0%, 100% { transform: scaleY(0.3); opacity: 0.4; }
-            50% { transform: scaleY(1); opacity: 1; }
+
+            0%,
+            100% {
+                transform: scaleY(0.3);
+                opacity: 0.4;
+            }
+
+            50% {
+                transform: scaleY(1);
+                opacity: 1;
+            }
         }
 
         .soundwave.paused span {
@@ -247,10 +294,13 @@
                 height: auto;
                 overflow-y: auto;
             }
-            html, body {
+
+            html,
+            body {
                 overflow: auto;
                 height: auto;
             }
+
             .deck-panel {
                 height: auto !important;
                 max-height: none !important;
@@ -349,7 +399,8 @@
             flex-shrink: 0;
         }
 
-        .dropzone:hover, .dropzone.dragover {
+        .dropzone:hover,
+        .dropzone.dragover {
             border-color: var(--cyan);
             background: rgba(0, 242, 254, 0.04);
             box-shadow: 0 0 25px rgba(0, 242, 254, 0.12);
@@ -431,7 +482,9 @@
             color: var(--text-secondary);
         }
 
-        select, input[type="text"], input[type="number"] {
+        select,
+        input[type="text"],
+        input[type="number"] {
             background: rgba(11, 15, 25, 0.9);
             border: 1px solid var(--border-subtle);
             color: var(--text-primary);
@@ -443,7 +496,9 @@
             transition: all 0.2s ease;
         }
 
-        select:focus, input[type="text"]:focus, input[type="number"]:focus {
+        select:focus,
+        input[type="text"]:focus,
+        input[type="number"]:focus {
             border-color: var(--cyan);
             box-shadow: 0 0 12px rgba(0, 242, 254, 0.25);
             background: rgba(15, 22, 36, 0.95);
@@ -641,8 +696,15 @@
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(6px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(6px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .synthesis-header {
@@ -696,7 +758,8 @@
             flex-direction: column;
             gap: 12px;
             overflow-y: auto;
-            flex: 1; /* Stretches to fill 100% of the right deck height */
+            flex: 1;
+            /* Stretches to fill 100% of the right deck height */
             padding-right: 6px;
         }
 
@@ -774,6 +837,354 @@
             opacity: 0.25;
             margin-bottom: 12px;
         }
+
+        /* AI Answer Card in Search Deck */
+        .ai-answer-card {
+            background: linear-gradient(135deg, rgba(28, 18, 48, 0.9) 0%, rgba(14, 20, 36, 0.95) 100%);
+            border: 1px solid rgba(255, 0, 128, 0.4);
+            border-radius: var(--radius-md);
+            padding: 18px 22px;
+            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.6), 0 0 25px rgba(255, 0, 128, 0.18);
+            animation: fadeIn 0.3s ease-out;
+            position: relative;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .ai-answer-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--grad-purple);
+        }
+
+        .ai-answer-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 10px;
+            margin-bottom: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .ai-answer-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 13px;
+            font-weight: 700;
+            color: #FF0080;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            letter-spacing: 0.03em;
+        }
+
+        .ai-model-tag {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10.5px;
+            padding: 2px 8px;
+            border-radius: var(--radius-full);
+            background: rgba(255, 0, 128, 0.12);
+            color: #FF70B8;
+            border: 1px solid rgba(255, 0, 128, 0.3);
+            font-weight: 600;
+        }
+
+        .ai-answer-body {
+            font-size: 13px;
+            line-height: 1.7;
+            color: #F8FAFC;
+        }
+
+        .ai-answer-body h1, .ai-answer-body h2, .ai-answer-body h3 {
+            color: #FFFFFF;
+            margin-top: 14px;
+            margin-bottom: 6px;
+            font-size: 13.5px;
+            font-weight: 700;
+        }
+
+        .ai-answer-body ul, .ai-answer-body ol {
+            padding-left: 20px;
+            margin: 8px 0;
+        }
+
+        .ai-answer-body li {
+            margin-bottom: 4px;
+        }
+
+        .ai-answer-body strong {
+            color: #38BDF8;
+        }
+
+        .search-mode-tabs {
+            display: flex;
+            gap: 4px;
+            background: rgba(255, 255, 255, 0.04);
+            padding: 3px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .search-mode-tab {
+            padding: 4px 10px;
+            font-size: 11px;
+            font-weight: 600;
+            border-radius: var(--radius-sm);
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+
+        .search-mode-tab.active {
+            background: rgba(255, 0, 128, 0.18);
+            color: #FFFFFF;
+            border: 1px solid rgba(255, 0, 128, 0.4);
+            box-shadow: 0 0 10px rgba(255, 0, 128, 0.2);
+        }
+
+        .section-subhead {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-top: 10px;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Database Config Button & Modal */
+        .db-config-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(14, 20, 32, 0.85);
+            border: 1px solid rgba(0, 242, 254, 0.3);
+            color: var(--text-primary);
+            padding: 6px 14px;
+            border-radius: var(--radius-full);
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(8px);
+        }
+
+        .db-config-btn:hover {
+            border-color: var(--cyan);
+            background: rgba(0, 242, 254, 0.15);
+            box-shadow: 0 0 15px rgba(0, 242, 254, 0.25);
+            transform: translateY(-1px);
+        }
+
+        .db-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--emerald);
+            box-shadow: 0 0 8px var(--emerald);
+        }
+
+        .db-dot.offline {
+            background: var(--rose);
+            box-shadow: 0 0 8px var(--rose);
+        }
+
+        .db-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(4, 6, 12, 0.85);
+            backdrop-filter: blur(12px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .db-modal-overlay.open {
+            display: flex;
+        }
+
+        .db-modal-card {
+            background: #0B0F19;
+            border: 1px solid rgba(0, 242, 254, 0.35);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.85), 0 0 35px rgba(0, 242, 254, 0.15);
+            border-radius: var(--radius-lg);
+            width: 560px;
+            max-width: 95vw;
+            padding: 26px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            position: relative;
+        }
+
+        .db-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border-subtle);
+            padding-bottom: 12px;
+        }
+
+        .db-modal-title {
+            font-size: 16px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .db-close-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 22px;
+            cursor: pointer;
+            line-height: 1;
+            padding: 2px 6px;
+            transition: color 0.2s;
+        }
+
+        .db-close-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .db-presets {
+            display: flex;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 4px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .db-preset-btn {
+            flex: 1;
+            padding: 8px 10px;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+
+        .db-preset-btn.active {
+            background: rgba(0, 242, 254, 0.15);
+            color: var(--cyan);
+            box-shadow: 0 0 10px rgba(0, 242, 254, 0.2);
+        }
+
+        .db-preset-btn:hover:not(.active) {
+            color: var(--text-primary);
+        }
+
+        .db-form-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 12px;
+        }
+
+        .db-form-col {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .db-status-banner {
+            padding: 10px 14px;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            line-height: 1.4;
+        }
+
+        .db-status-banner.success {
+            display: flex;
+            background: rgba(16, 185, 129, 0.12);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: var(--emerald);
+        }
+
+        .db-status-banner.error {
+            display: flex;
+            background: rgba(244, 63, 94, 0.12);
+            border: 1px solid rgba(244, 63, 94, 0.3);
+            color: var(--rose);
+        }
+
+        .db-modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 6px;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-primary);
+            padding: 9px 16px;
+            border-radius: var(--radius-sm);
+            font-weight: 600;
+            font-size: 12.5px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        .synth-action-btn {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: var(--text-primary);
+            padding: 4px 10px;
+            border-radius: var(--radius-sm);
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .synth-action-btn:hover {
+            background: rgba(255, 255, 255, 0.16);
+            border-color: var(--cyan);
+            color: var(--cyan);
+        }
+
+        .synth-action-btn.pdf-btn {
+            background: rgba(0, 242, 254, 0.12);
+            border-color: rgba(0, 242, 254, 0.35);
+            color: var(--cyan);
+        }
+
+        .synth-action-btn.pdf-btn:hover {
+            background: rgba(0, 242, 254, 0.25);
+            box-shadow: 0 0 10px rgba(0, 242, 254, 0.35);
+        }
     </style>
 </head>
 
@@ -784,7 +1195,8 @@
         <div class="brand-container">
             <div class="brand-logo">
                 <svg viewBox="0 0 24 24">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9v-4h2v4zm0-6H9V8h2v2zm4 6h-2V8h2v8z"/>
+                    <path
+                        d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9v-4h2v4zm0-6H9V8h2v2zm4 6h-2V8h2v8z" />
                 </svg>
             </div>
             <div>
@@ -804,6 +1216,12 @@
                 <span class="engine-tag">Groq LPU (Llama 3.1)</span>
                 <span class="engine-tag">all-MiniLM-L6-v2 (384d)</span>
             </div>
+            <button class="db-config-btn" id="dbConfigBtn" onclick="openDbModal()"
+                title="Configure Vector Database (Supabase / Postgres)">
+                <span class="db-dot" id="dbDot"></span>
+                <span id="dbNameText">PostgreSQL</span>
+                <span style="font-size: 11px; opacity: 0.8;">⚙️</span>
+            </button>
             <div class="soundwave paused" id="audioWave">
                 <span></span><span></span><span></span><span></span><span></span>
             </div>
@@ -824,7 +1242,8 @@
                     <div class="deck-icon-badge">🎙️</div>
                     <div>
                         <div class="deck-title">Ingestion & Structuring Deck</div>
-                        <div class="deck-subtitle">Upload media for transcription, LLM alignment, and vector indexing</div>
+                        <div class="deck-subtitle">Upload media for transcription, LLM alignment, and vector indexing
+                        </div>
                     </div>
                 </div>
             </div>
@@ -898,7 +1317,14 @@
             <div class="synthesis-card" id="synthesisCard" style="display: none;">
                 <div class="synthesis-header">
                     <span class="synthesis-badge">⚡ Executive Synthesis & Key Decisions</span>
-                    <button id="copySynthBtn" style="background:transparent; border:1px solid rgba(255,255,255,0.15); color:var(--text-secondary); padding:2px 8px; border-radius:4px; font-size:10px; cursor:pointer;" onclick="copySynthesisText()">Copy</button>
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                        <button id="copySynthBtn" class="synth-action-btn" onclick="copySynthesisText()"
+                            title="Copy Summary">📋 Copy</button>
+                        <button id="exportPdfBtn" class="synth-action-btn pdf-btn" onclick="exportTranscriptToPdf()"
+                            title="Download PDF Report">📄 Export PDF</button>
+                        <button id="exportTxtBtn" class="synth-action-btn" onclick="exportTranscriptToTxt()"
+                            title="Download Full TXT">📝 TXT</button>
+                    </div>
                 </div>
                 <div class="synthesis-body" id="synthesisContent"></div>
             </div>
@@ -908,21 +1334,30 @@
         <section class="deck-panel search-deck-panel">
             <div class="deck-header">
                 <div class="deck-title-wrap">
-                    <div class="deck-icon-badge">🔍</div>
+                    <div class="deck-icon-badge">⚡</div>
                     <div>
-                        <div class="deck-title">Neural Semantic Search Deck</div>
-                        <div class="deck-subtitle">Cosine vector similarity query across all indexed transcript chunks</div>
+                        <div class="deck-title">Knowledge Base Intelligence & Q&A</div>
+                        <div class="deck-subtitle">Groq / LLM retrieval-augmented generation across indexed audio chunks</div>
                     </div>
                 </div>
-                <span id="resultCountBadge" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--pink); font-weight:600;"></span>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <div class="search-mode-tabs">
+                        <button type="button" class="search-mode-tab active" id="tabModeAi" onclick="setSearchMode('ai')" title="AI Generative Summary & Grounded Answering">⚡ AI Answer (RAG)</button>
+                        <button type="button" class="search-mode-tab" id="tabModeRaw" onclick="setSearchMode('raw')" title="Raw Vector Distance Matches">🔍 Raw Chunks</button>
+                    </div>
+                    <span id="resultCountBadge" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--pink); font-weight:600;"></span>
+                </div>
             </div>
 
             <div class="search-bar-wrap">
-                <input type="text" id="searchInput" placeholder="Ask anything... e.g. 'what were the budget decisions for Q3?'" onkeydown="if(event.key==='Enter') runSearch()">
+                <input type="text" id="searchInput"
+                    placeholder="Ask anything or prompt... e.g. 'summarize', 'what did the speaker say about authority?'"
+                    onkeydown="if(event.key==='Enter') runSearch()">
                 <div style="width: 85px;">
-                    <input type="number" id="topK" value="5" min="1" max="25" title="Top K matches" style="width: 100%; text-align: center;">
+                    <input type="number" id="topK" value="5" min="1" max="25" title="Top K matches"
+                        style="width: 100%; text-align: center;">
                 </div>
-                <button class="btn-primary btn-search" onclick="runSearch()">
+                <button class="btn-primary btn-search" id="queryBtn" onclick="runSearch()">
                     <span>Query</span>
                 </button>
             </div>
@@ -931,9 +1366,10 @@
             <div class="results-container" id="searchResults">
                 <div class="empty-results">
                     <svg viewBox="0 0 24 24">
-                        <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                        <path
+                            d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
                     </svg>
-                    <div>Search deck is ready. Type a natural language query to retrieve matching moments.</div>
+                    <div>Search deck is ready. Type a prompt like <strong>"summarize"</strong> or ask a question to generate an AI grounded response.</div>
                 </div>
             </div>
         </section>
@@ -1087,14 +1523,20 @@
                         audioWave.classList.add("paused");
                         loadStats();
 
+                        activeCompletedJobId = jobId;
+                        activeCompletedJobData = job;
+
+                        const synthCard = document.getElementById("synthesisCard");
+                        const synthContent = document.getElementById("synthesisContent");
+                        synthCard.style.display = "flex";
+
                         if (job.summary || job.action_items) {
-                            const synthCard = document.getElementById("synthesisCard");
-                            const synthContent = document.getElementById("synthesisContent");
-                            synthCard.style.display = "flex";
                             let text = "";
                             if (job.summary) text += `${job.summary.trim()}\n\n`;
                             if (job.action_items) text += `${job.action_items.trim()}`;
                             synthContent.textContent = text.trim();
+                        } else {
+                            synthContent.textContent = "Transcription complete. All segments indexed into the vector database. Click '📄 Export PDF' to generate the document.";
                         }
                     } else if (job.status === "error") {
                         clearInterval(interval);
@@ -1108,52 +1550,368 @@
             }, 1200);
         }
 
+        let activeCompletedJobId = null;
+        let activeCompletedJobData = null;
+
+        async function exportTranscriptToPdf() {
+            if (!activeCompletedJobId) {
+                alert("No completed transcription found to export. Please process a media file first.");
+                return;
+            }
+
+            const btn = document.getElementById("exportPdfBtn");
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = "⏳ Generating PDF...";
+
+            try {
+                const res = await fetch(`${API_BASE}/api/jobs/${activeCompletedJobId}/transcript`);
+                if (!res.ok) throw new Error("Failed to fetch transcript details");
+                const data = await res.json();
+
+                const cleanFilename = (data.source_filename || "recording").replace(/[^a-zA-Z0-9_-]/g, "_");
+                const dateStr = new Date().toLocaleDateString("en-US", { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+                const reportContainer = document.createElement("div");
+                reportContainer.style.padding = "30px 35px";
+                reportContainer.style.background = "#FFFFFF";
+                reportContainer.style.color = "#0F172A";
+                reportContainer.style.fontFamily = "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+                reportContainer.style.lineHeight = "1.6";
+                reportContainer.style.fontSize = "12.5px";
+
+                let synthesisHtml = "";
+                if (data.summary || data.action_items) {
+                    synthesisHtml = `
+                        <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-left: 4px solid #0284C7; border-radius: 6px; padding: 16px 20px; margin-bottom: 22px;">
+                            <div style="font-size: 14px; font-weight: 700; color: #0F172A; margin-bottom: 8px;">
+                                ⚡ Executive Synthesis & Key Decisions
+                            </div>
+                            ${data.summary ? `<div style="margin-bottom: 10px; font-size: 12.5px; color: #334155;">${escapeHtml(data.summary).replace(/\n/g, '<br>')}</div>` : ''}
+                            ${data.action_items ? `<div style="font-size: 12.5px; color: #1E293B; border-top: 1px dashed #CBD5E1; padding-top: 8px;">${escapeHtml(data.action_items).replace(/\n/g, '<br>')}</div>` : ''}
+                        </div>
+                    `;
+                }
+
+                let chunksHtml = "";
+                if (data.chunks && data.chunks.length > 0) {
+                    chunksHtml = data.chunks.map(c => {
+                        const sMin = Math.floor(c.start_time / 60).toString().padStart(2, '0');
+                        const sSec = Math.floor(c.start_time % 60).toString().padStart(2, '0');
+                        const eMin = Math.floor(c.end_time / 60).toString().padStart(2, '0');
+                        const eSec = Math.floor(c.end_time % 60).toString().padStart(2, '0');
+                        const timeBadge = `${sMin}:${sSec} - ${eMin}:${eSec}`;
+                        return `
+                            <div style="margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #F1F5F9;">
+                                <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; color: #0284C7; margin-bottom: 3px;">
+                                    ⏱️ [${timeBadge}]
+                                </div>
+                                <div style="color: #1E293B; font-size: 12.5px; line-height: 1.6;">
+                                    ${escapeHtml(c.text)}
+                                </div>
+                            </div>
+                        `;
+                    }).join("");
+                } else if (data.full_text) {
+                    chunksHtml = `<div style="white-space: pre-wrap; color: #1E293B;">${escapeHtml(data.full_text)}</div>`;
+                } else {
+                    chunksHtml = `<div style="color: #64748B;">No transcript content available.</div>`;
+                }
+
+                reportContainer.innerHTML = `
+                    <div style="border-bottom: 2px solid #0F172A; padding-bottom: 14px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: flex-end;">
+                        <div>
+                            <div style="font-size: 20px; font-weight: 800; color: #0F172A; letter-spacing: -0.02em;">
+                                TRANSCRIPT & INTELLIGENCE REPORT
+                            </div>
+                            <div style="font-size: 11px; color: #64748B; margin-top: 2px;">
+                                Signal Neural Audio Knowledge Base
+                            </div>
+                        </div>
+                        <div style="text-align: right; font-size: 11px; color: #475569; font-family: 'JetBrains Mono', monospace;">
+                            <div><strong>Date:</strong> ${dateStr}</div>
+                            <div><strong>File:</strong> ${escapeHtml(data.source_filename)}</div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 8px; margin-bottom: 18px; font-size: 11px;">
+                        <span style="background: #F1F5F9; border: 1px solid #CBD5E1; padding: 3px 8px; border-radius: 4px; color: #334155;">
+                            🎙️ <strong>Model:</strong> faster-whisper (${data.model_name || 'base'})
+                        </span>
+                        <span style="background: #F1F5F9; border: 1px solid #CBD5E1; padding: 3px 8px; border-radius: 4px; color: #334155;">
+                            📊 <strong>Segments:</strong> ${data.chunks ? data.chunks.length : 0} chunks
+                        </span>
+                        <span style="background: #F0FDF4; border: 1px solid #BBF7D0; padding: 3px 8px; border-radius: 4px; color: #166534;">
+                            🔒 <strong>Vectorized:</strong> all-MiniLM-L6-v2 (384d)
+                        </span>
+                    </div>
+
+                    ${synthesisHtml}
+
+                    <div style="margin-top: 20px;">
+                        <div style="font-size: 14px; font-weight: 700; color: #0F172A; margin-bottom: 12px; border-bottom: 1px solid #E2E8F0; padding-bottom: 4px;">
+                            📝 Full Aligned Transcript
+                        </div>
+                        ${chunksHtml}
+                    </div>
+
+                    <div style="margin-top: 30px; border-top: 1px solid #E2E8F0; padding-top: 10px; text-align: center; font-size: 10px; color: #94A3B8;">
+                        Signal Enterprise Neural Engine · Confidential Intelligence Report
+                    </div>
+                `;
+
+                document.body.appendChild(reportContainer);
+
+                const opt = {
+                    margin: [10, 10, 10, 10],
+                    filename: `${cleanFilename}_Transcript_Report.pdf`,
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2, useCORS: true, logging: false },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                };
+
+                await html2pdf().set(opt).from(reportContainer).save();
+                document.body.removeChild(reportContainer);
+
+            } catch (err) {
+                alert(`Failed to generate PDF: ${err.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+
+        async function exportTranscriptToTxt() {
+            if (!activeCompletedJobId) {
+                alert("No completed transcription found to export.");
+                return;
+            }
+            try {
+                const res = await fetch(`${API_BASE}/api/jobs/${activeCompletedJobId}/transcript`);
+                const data = await res.json();
+
+                let content = `SIGNAL TRANSCRIPT REPORT\n`;
+                content += `File: ${data.source_filename}\n`;
+                content += `Date: ${new Date().toLocaleString()}\n`;
+                content += `==================================================\n\n`;
+
+                if (data.summary) {
+                    content += `EXECUTIVE SUMMARY:\n${data.summary}\n\n`;
+                }
+                if (data.action_items) {
+                    content += `ACTION ITEMS & DECISIONS:\n${data.action_items}\n\n`;
+                }
+
+                content += `FULL TRANSCRIPT:\n==================================================\n`;
+                if (data.chunks && data.chunks.length > 0) {
+                    data.chunks.forEach(c => {
+                        const sMin = Math.floor(c.start_time / 60).toString().padStart(2, '0');
+                        const sSec = Math.floor(c.start_time % 60).toString().padStart(2, '0');
+                        const eMin = Math.floor(c.end_time / 60).toString().padStart(2, '0');
+                        const eSec = Math.floor(c.end_time % 60).toString().padStart(2, '0');
+                        content += `[${sMin}:${sSec} - ${eMin}:${eSec}] ${c.text}\n\n`;
+                    });
+                } else {
+                    content += data.full_text || "";
+                }
+
+                const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                const cleanName = (data.source_filename || "transcript").replace(/[^a-zA-Z0-9_-]/g, "_");
+                a.download = `${cleanName}_Transcript.txt`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } catch (err) {
+                alert(`Failed to export TXT: ${err.message}`);
+            }
+        }
+
+        let currentSearchMode = "ai"; // "ai" or "raw"
+
+        function setSearchMode(mode) {
+            currentSearchMode = mode;
+            document.getElementById("tabModeAi").className = mode === "ai" ? "search-mode-tab active" : "search-mode-tab";
+            document.getElementById("tabModeRaw").className = mode === "raw" ? "search-mode-tab active" : "search-mode-tab";
+            const input = document.getElementById("searchInput");
+            if (mode === "ai") {
+                input.placeholder = "Ask anything or prompt... e.g. 'summarize', 'what did the speaker say about authority?'";
+            } else {
+                input.placeholder = "Vector distance search... e.g. 'financial projections', 'prayer and faith'";
+            }
+        }
+
+        let latestAiAnswerRaw = "";
+
         async function runSearch() {
             const query = document.getElementById("searchInput").value.trim();
             const topK = parseInt(document.getElementById("topK").value) || 5;
             const resultsEl = document.getElementById("searchResults");
             const countBadge = document.getElementById("resultCountBadge");
+            const queryBtn = document.getElementById("queryBtn");
 
             if (!query) return;
 
-            resultsEl.innerHTML = `<div class="empty-results"><div class="pulse-dot" style="margin:0 auto 12px;"></div>Scanning HNSW cosine vector index...</div>`;
+            queryBtn.disabled = true;
 
-            try {
-                const res = await fetch(`${API_BASE}/search`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ query, top_k: topK }),
-                });
+            if (currentSearchMode === "ai") {
+                resultsEl.innerHTML = `
+                    <div class="empty-results">
+                        <div class="pulse-dot" style="margin:0 auto 14px; background:var(--pink); box-shadow:0 0 12px var(--pink);"></div>
+                        <div style="font-weight:600; color:var(--text-primary); margin-bottom:4px;">Synthesizing Intelligence with AI Model...</div>
+                        <div style="font-size:11.5px; color:var(--text-muted);">Retrieving nearest vector embeddings & prompting Groq/LLM engine</div>
+                    </div>
+                `;
 
-                if (!res.ok) throw new Error("Search query failed");
+                try {
+                    const res = await fetch(`${API_BASE}/ask`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ question: query, top_k: topK }),
+                    });
 
-                const { results } = await res.json();
-                countBadge.textContent = results.length ? `${results.length} MATCHES` : "0 MATCHES";
+                    if (!res.ok) {
+                        const errData = await res.json().catch(() => ({}));
+                        throw new Error(errData.detail || "Q&A generation failed");
+                    }
 
-                if (!results.length) {
-                    resultsEl.innerHTML = `<div class="empty-results">No matches found in the knowledge base.</div>`;
-                    return;
-                }
+                    const data = await res.json();
+                    latestAiAnswerRaw = data.answer || "";
+                    const sources = data.sources || [];
+                    const providerLabel = data.provider && data.provider !== "None" ? `${data.provider} · ${data.model || ''}` : "AI Engine";
 
-                resultsEl.innerHTML = results.map(r => {
-                    const matchPercent = Math.max(0, Math.min(100, (1 - (r.distance / 2)) * 100)).toFixed(1);
-                    return `
-                        <div class="result-card">
-                            <div class="result-meta">
-                                <div style="display:flex; align-items:center; gap:8px;">
-                                    <span class="result-time-pill">${formatTime(r.start_time)} &ndash; ${formatTime(r.end_time)}</span>
-                                    <span class="result-file-badge" title="${escapeHtml(r.source_file)}">${escapeHtml(r.source_file)}</span>
+                    countBadge.textContent = sources.length ? `${sources.length} SOURCES` : "0 SOURCES";
+
+                    let html = `
+                        <!-- AI Synthesis Answer Card -->
+                        <div class="ai-answer-card">
+                            <div class="ai-answer-header">
+                                <div class="ai-answer-title">
+                                    <span>⚡</span>
+                                    <span>AI Intelligence Synthesis</span>
                                 </div>
-                                <span class="result-score-pill">${matchPercent}% Match (${r.distance.toFixed(3)})</span>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span class="ai-model-tag">${escapeHtml(providerLabel)}</span>
+                                    <button class="synth-action-btn" id="copyAiAnswerBtn" onclick="copyAiAnswerText()">📋 Copy</button>
+                                </div>
                             </div>
-                            <div class="result-content">${escapeHtml(r.text)}</div>
+                            <div class="ai-answer-body" id="aiAnswerContent">
+                                ${formatMarkdown(data.answer)}
+                            </div>
                         </div>
                     `;
-                }).join("");
 
-            } catch (err) {
-                resultsEl.innerHTML = `<div class="empty-results" style="color:var(--rose)">Error executing vector search: ${err.message}</div>`;
+                    if (sources.length > 0) {
+                        html += `<div class="section-subhead"><span>🔍</span> <span>Referenced Audio Moments & Vectors (${sources.length})</span></div>`;
+                        html += sources.map(r => {
+                            const matchPercent = Math.max(0, Math.min(100, (1 - (r.distance / 2)) * 100)).toFixed(1);
+                            return `
+                                <div class="result-card">
+                                    <div class="result-meta">
+                                        <div style="display:flex; align-items:center; gap:8px;">
+                                            <span class="result-time-pill">⏱️ ${formatTime(r.start_time)} &ndash; ${formatTime(r.end_time)}</span>
+                                            <span class="result-file-badge" title="${escapeHtml(r.source_file)}">${escapeHtml(r.source_file)}</span>
+                                        </div>
+                                        <span class="result-score-pill">${matchPercent}% Match (${r.distance.toFixed(3)})</span>
+                                    </div>
+                                    <div class="result-content">${escapeHtml(r.text)}</div>
+                                </div>
+                            `;
+                        }).join("");
+                    }
+
+                    resultsEl.innerHTML = html;
+
+                } catch (err) {
+                    resultsEl.innerHTML = `<div class="empty-results" style="color:var(--rose)">Error generating AI answer: ${err.message}</div>`;
+                } finally {
+                    queryBtn.disabled = false;
+                }
+
+            } else {
+                // Raw Vector Search Mode
+                resultsEl.innerHTML = `<div class="empty-results"><div class="pulse-dot" style="margin:0 auto 12px;"></div>Scanning HNSW cosine vector index...</div>`;
+
+                try {
+                    const res = await fetch(`${API_BASE}/search`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ query, top_k: topK }),
+                    });
+
+                    if (!res.ok) throw new Error("Search query failed");
+
+                    const { results } = await res.json();
+                    countBadge.textContent = results.length ? `${results.length} MATCHES` : "0 MATCHES";
+
+                    if (!results.length) {
+                        resultsEl.innerHTML = `<div class="empty-results">No vector matches found in the knowledge base.</div>`;
+                        return;
+                    }
+
+                    resultsEl.innerHTML = results.map(r => {
+                        const matchPercent = Math.max(0, Math.min(100, (1 - (r.distance / 2)) * 100)).toFixed(1);
+                        return `
+                            <div class="result-card">
+                                <div class="result-meta">
+                                    <div style="display:flex; align-items:center; gap:8px;">
+                                        <span class="result-time-pill">⏱️ ${formatTime(r.start_time)} &ndash; ${formatTime(r.end_time)}</span>
+                                        <span class="result-file-badge" title="${escapeHtml(r.source_file)}">${escapeHtml(r.source_file)}</span>
+                                    </div>
+                                    <span class="result-score-pill">${matchPercent}% Match (${r.distance.toFixed(3)})</span>
+                                </div>
+                                <div class="result-content">${escapeHtml(r.text)}</div>
+                            </div>
+                        `;
+                    }).join("");
+
+                } catch (err) {
+                    resultsEl.innerHTML = `<div class="empty-results" style="color:var(--rose)">Error executing vector search: ${err.message}</div>`;
+                } finally {
+                    queryBtn.disabled = false;
+                }
             }
+        }
+
+        function formatMarkdown(text) {
+            if (!text) return "";
+            let safe = escapeHtml(text);
+            // Code blocks
+            safe = safe.replace(/```([\s\S]*?)```/g, '<pre style="background:rgba(0,0,0,0.5); padding:10px; border-radius:6px; margin:8px 0; overflow-x:auto; font-family:monospace; font-size:12px; border:1px solid rgba(255,255,255,0.08);">$1</pre>');
+            // Inline code
+            safe = safe.replace(/`([^`]+)`/g, '<code style="background:rgba(255,255,255,0.08); padding:2px 5px; border-radius:4px; font-family:monospace; font-size:12px; color:var(--cyan);">$1</code>');
+            // Headers
+            safe = safe.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+            safe = safe.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+            safe = safe.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+            // Bold
+            safe = safe.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            // Italic
+            safe = safe.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+            // Timestamp badges
+            safe = safe.replace(/\[((?:Source:[^\]]+|[\d]{1,2}:[\d]{2}(?:\s*-\s*[\d]{1,2}:[\d]{2})?))\]/gi, '<span class="result-time-pill" style="font-size:10.5px; margin:0 2px;">⏱️ $1</span>');
+            // Bullet points
+            safe = safe.replace(/^\s*[-*•]\s+(.*)$/gim, '<li>$1</li>');
+            safe = safe.replace(/(<li>.*<\/li>)/gims, '<ul>$1</ul>');
+            safe = safe.replace(/<\/ul>\s*<ul>/g, '');
+            // Paragraph breaks
+            safe = safe.replace(/\n\n/g, '<br><br>');
+            safe = safe.replace(/\n/g, '<br>');
+            return safe;
+        }
+
+        function copyAiAnswerText() {
+            if (!latestAiAnswerRaw) return;
+            navigator.clipboard.writeText(latestAiAnswerRaw).then(() => {
+                const btn = document.getElementById("copyAiAnswerBtn");
+                if (btn) {
+                    btn.textContent = "Copied!";
+                    setTimeout(() => { btn.textContent = "📋 Copy"; }, 2000);
+                }
+            });
         }
 
         function formatTime(seconds) {
@@ -1176,7 +1934,244 @@
                 setTimeout(() => { btn.textContent = "Copy"; }, 2000);
             });
         }
+
+        // Database Configuration Modal Handlers
+        async function fetchCurrentDbConfig() {
+            const dot = document.getElementById("dbDot");
+            const nameEl = document.getElementById("dbNameText");
+            try {
+                const res = await fetch(`${API_BASE}/api/db/config`);
+                if (!res.ok) throw new Error();
+                const data = await res.json();
+
+                const isSupabase = data.is_supabase || data.host.includes("supabase");
+                nameEl.textContent = isSupabase ? "Supabase" : (data.host === "db" || data.host === "localhost" ? "Local pgvector" : data.host);
+                dot.className = data.is_connected ? "db-dot" : "db-dot offline";
+
+                // Prepopulate modal inputs
+                document.getElementById("dbHost").value = data.host || "";
+                document.getElementById("dbPort").value = data.port || 5432;
+                document.getElementById("dbName").value = data.dbname || "postgres";
+                document.getElementById("dbUser").value = data.user || "postgres";
+
+                if (isSupabase) {
+                    setActivePresetBtn("presetSupabase");
+                } else if (data.host === "localhost" || data.host === "db") {
+                    setActivePresetBtn("presetLocal");
+                } else {
+                    setActivePresetBtn("presetCustom");
+                }
+            } catch {
+                nameEl.textContent = "DB Offline";
+                dot.className = "db-dot offline";
+            }
+        }
+        fetchCurrentDbConfig();
+
+        function openDbModal() {
+            document.getElementById("dbModal").classList.add("open");
+            hideDbStatus();
+        }
+
+        function closeDbModal() {
+            document.getElementById("dbModal").classList.remove("open");
+        }
+
+        function handleModalOverlayClick(e) {
+            if (e.target.id === "dbModal") closeDbModal();
+        }
+
+        function setActivePresetBtn(activeId) {
+            ["presetSupabase", "presetLocal", "presetCustom"].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.className = id === activeId ? "db-preset-btn active" : "db-preset-btn";
+            });
+        }
+
+        function applyPreset(preset) {
+            setActivePresetBtn(`preset${preset.charAt(0).toUpperCase() + preset.slice(1)}`);
+            hideDbStatus();
+            if (preset === "supabase") {
+                document.getElementById("dbHost").placeholder = "db.your-ref.supabase.co";
+                document.getElementById("dbPort").value = 5432;
+                document.getElementById("dbName").value = "postgres";
+                document.getElementById("dbUser").value = "postgres";
+            } else if (preset === "local") {
+                document.getElementById("dbHost").value = "db";
+                document.getElementById("dbPort").value = 5432;
+                document.getElementById("dbName").value = "transcripts_agile";
+                document.getElementById("dbUser").value = "postgres";
+                document.getElementById("dbPassword").value = "postgres";
+            }
+        }
+
+        function parseConnString(uri) {
+            if (!uri || !uri.startsWith("postgres")) return;
+            try {
+                const parsed = new URL(uri);
+                document.getElementById("dbHost").value = parsed.hostname;
+                if (parsed.port) document.getElementById("dbPort").value = parsed.port;
+                document.getElementById("dbUser").value = decodeURIComponent(parsed.username);
+                document.getElementById("dbPassword").value = decodeURIComponent(parsed.password);
+                if (parsed.pathname && parsed.pathname.length > 1) {
+                    document.getElementById("dbName").value = parsed.pathname.slice(1);
+                }
+                if (parsed.hostname.includes("supabase")) {
+                    setActivePresetBtn("presetSupabase");
+                }
+            } catch (e) {
+                // partial parsing
+            }
+        }
+
+        function showDbStatus(ok, msg) {
+            const banner = document.getElementById("dbStatusBanner");
+            banner.className = `db-status-banner ${ok ? 'success' : 'error'}`;
+            banner.innerHTML = `<span>${ok ? '✅' : '❌'}</span> <span>${escapeHtml(msg)}</span>`;
+        }
+
+        function hideDbStatus() {
+            const banner = document.getElementById("dbStatusBanner");
+            banner.className = "db-status-banner";
+            banner.style.display = "none";
+        }
+
+        function getDbFormData() {
+            return {
+                host: document.getElementById("dbHost").value.trim(),
+                port: parseInt(document.getElementById("dbPort").value) || 5432,
+                dbname: document.getElementById("dbName").value.trim(),
+                user: document.getElementById("dbUser").value.trim(),
+                password: document.getElementById("dbPassword").value,
+            };
+        }
+
+        async function testDbConnection() {
+            const btn = document.getElementById("dbTestBtn");
+            const payload = getDbFormData();
+            btn.disabled = true;
+            btn.textContent = "Testing...";
+            hideDbStatus();
+
+            try {
+                const res = await fetch(`${API_BASE}/api/db/test`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || "Connection failed");
+                showDbStatus(true, data.message || "Connection successful!");
+            } catch (err) {
+                showDbStatus(false, err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "🔍 Test Connection";
+            }
+        }
+
+        async function saveDbConnection() {
+            const btn = document.getElementById("dbSaveBtn");
+            const payload = getDbFormData();
+            btn.disabled = true;
+            btn.textContent = "Saving & Connecting...";
+            hideDbStatus();
+
+            try {
+                const res = await fetch(`${API_BASE}/api/db/config`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || "Failed to switch DB");
+                showDbStatus(true, "Switched active database successfully!");
+                fetchCurrentDbConfig();
+                loadStats();
+                setTimeout(() => { closeDbModal(); }, 1200);
+            } catch (err) {
+                showDbStatus(false, err.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "💾 Save & Switch DB";
+            }
+        }
     </script>
+
+    <!-- Database Configuration Modal Dialog -->
+    <div class="db-modal-overlay" id="dbModal" onclick="handleModalOverlayClick(event)">
+        <div class="db-modal-card">
+            <div class="db-modal-header">
+                <div class="db-modal-title">
+                    <span style="font-size: 20px;">⚡</span>
+                    <span>Vector Database Configuration</span>
+                </div>
+                <button class="db-close-btn" onclick="closeDbModal()" title="Close">&times;</button>
+            </div>
+
+            <!-- Quick Presets -->
+            <div class="db-presets">
+                <button type="button" class="db-preset-btn" id="presetSupabase" onclick="applyPreset('supabase')">
+                    🚀 Supabase Cloud
+                </button>
+                <button type="button" class="db-preset-btn" id="presetLocal" onclick="applyPreset('local')">
+                    🐳 Local Docker (pgvector)
+                </button>
+                <button type="button" class="db-preset-btn active" id="presetCustom" onclick="applyPreset('custom')">
+                    ⚙️ Custom PostgreSQL
+                </button>
+            </div>
+
+            <!-- Connection String Quick Fill -->
+            <div class="control-group">
+                <label for="dbConnString">Quick Paste Connection URI (Optional)</label>
+                <input type="text" id="dbConnString"
+                    placeholder="postgresql://postgres:[password]@db.ref.supabase.co:5432/postgres"
+                    oninput="parseConnString(this.value)">
+            </div>
+
+            <!-- Connection Fields -->
+            <div class="db-form-grid">
+                <div class="db-form-col">
+                    <label for="dbHost">Host / Endpoint</label>
+                    <input type="text" id="dbHost" placeholder="localhost or db.xxxx.supabase.co">
+                </div>
+                <div class="db-form-col">
+                    <label for="dbPort">Port</label>
+                    <input type="number" id="dbPort" value="5432">
+                </div>
+            </div>
+
+            <div class="db-form-grid">
+                <div class="db-form-col">
+                    <label for="dbName">Database Name</label>
+                    <input type="text" id="dbName" value="postgres">
+                </div>
+                <div class="db-form-col">
+                    <label for="dbUser">User</label>
+                    <input type="text" id="dbUser" value="postgres">
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label for="dbPassword">Password</label>
+                <input type="password" id="dbPassword" placeholder="••••••••">
+            </div>
+
+            <!-- Live Status Feedback Banner -->
+            <div class="db-status-banner" id="dbStatusBanner"></div>
+
+            <!-- Actions -->
+            <div class="db-modal-actions">
+                <button type="button" class="btn-secondary" id="dbTestBtn" onclick="testDbConnection()">
+                    🔍 Test Connection
+                </button>
+                <button type="button" class="btn-primary" id="dbSaveBtn" onclick="saveDbConnection()">
+                    💾 Save & Switch DB
+                </button>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>

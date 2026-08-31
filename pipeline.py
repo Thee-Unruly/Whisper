@@ -26,10 +26,52 @@ os.environ.setdefault(
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 EMBEDDING_DIM = 384
 
-# ---- GROQ LLM CONFIG ----
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
-GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
-GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+# ---- LLM PROVIDER & MODEL RESOLVER ----
+def get_llm_config(api_key: Optional[str] = None, model: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Dynamically resolves active LLM provider (Groq or OpenRouter or custom OpenAI compatible).
+    Prefers GROQ_API_KEY if present, falls back to OPENROUTER_API_KEY, and allows overrides.
+    """
+    explicit_key = api_key or ""
+    groq_key = os.environ.get("GROQ_API_KEY", "")
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
+
+    # 1. Determine Provider
+    if explicit_key.startswith("gsk_") or (not explicit_key and groq_key):
+        key = explicit_key or groq_key
+        url = "https://api.groq.com/openai/v1/chat/completions"
+        default_model = os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
+        provider = "Groq"
+    elif explicit_key.startswith("sk-or-") or (not explicit_key and openrouter_key):
+        key = explicit_key or openrouter_key
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        # Support user model or free OpenRouter model
+        default_model = os.environ.get("OPENROUTER_MODEL") or os.environ.get("GROQ_MODEL") or "nvidia/nemotron-3.5-lightning:free"
+        provider = "OpenRouter"
+    else:
+        # Fallback default
+        key = explicit_key or groq_key or openrouter_key
+        url = "https://api.groq.com/openai/v1/chat/completions"
+        default_model = os.environ.get("GROQ_MODEL", "llama-3.1-8b-instant")
+        provider = "Groq"
+
+    chosen_model = model or default_model
+    headers = {
+        "Authorization": f"Bearer {key}" if key else "",
+        "Content-Type": "application/json",
+    }
+    if provider == "OpenRouter":
+        headers["HTTP-Referer"] = "http://localhost:8000"
+        headers["X-Title"] = "Signal Audio KB"
+
+    return {
+        "key": key,
+        "url": url,
+        "model": chosen_model,
+        "provider": provider,
+        "headers": headers,
+    }
+
 
 CORRECTION_SYSTEM_PROMPT = (
     "You are an expert transcript editor and thought-structuring assistant. "
@@ -146,25 +188,19 @@ async def async_correct_text(
     max_retries: int = 3
 ) -> str:
     """
-    Stage 2: Async Groq LLM correction and thought-structuring pass
+    Stage 2: Async LLM correction and thought-structuring pass
     with context-aware stitching and backoff handling.
     """
-    key = api_key or os.environ.get("GROQ_API_KEY") or GROQ_API_KEY
-    if not key:
+    cfg = get_llm_config(api_key=api_key, model=model)
+    if not cfg["key"]:
         return text  # Fallback to raw text if no key provided
-
-    model_name = model or os.environ.get("GROQ_MODEL") or GROQ_MODEL
 
     user_prompt = text
     if prev_context:
         user_prompt = f"PREVIOUS CHUNK CONTEXT (for continuity only):\n\"{prev_context}\"\n\nCURRENT SPOKEN RAW CHUNK TO EDIT AND STRUCTURE:\n\"{text}\""
 
-    headers = {
-        "Authorization": f"Bearer {key}",
-        "Content-Type": "application/json",
-    }
     payload = {
-        "model": model_name,
+        "model": cfg["model"],
         "messages": [
             {"role": "system", "content": CORRECTION_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
@@ -174,7 +210,7 @@ async def async_correct_text(
 
     for attempt in range(max_retries):
         try:
-            resp = await client.post(GROQ_URL, json=payload, headers=headers, timeout=25.0)
+            resp = await client.post(cfg["url"], json=payload, headers=cfg["headers"], timeout=25.0)
 
             if resp.status_code == 200:
                 data = resp.json()
@@ -183,13 +219,13 @@ async def async_correct_text(
             elif resp.status_code == 429:
                 retry_after_str = resp.headers.get("retry-after")
                 sleep_duration = float(retry_after_str) if retry_after_str else (1.5 * (2 ** attempt) + 0.2)
-                logger.warning(f"Groq rate limit hit (429). Backing off for {sleep_duration:.2f}s...")
+                logger.warning(f"LLM rate limit hit (429). Backing off for {sleep_duration:.2f}s...")
                 await asyncio.sleep(sleep_duration)
             else:
-                logger.warning(f"Groq API error {resp.status_code}: {resp.text}")
+                logger.warning(f"LLM API error {resp.status_code}: {resp.text}")
                 await asyncio.sleep(1.0)
         except Exception as e:
-            logger.warning(f"Exception during Groq request attempt {attempt + 1}: {e}")
+            logger.warning(f"Exception during LLM request attempt {attempt + 1}: {e}")
             await asyncio.sleep(1.0)
 
     return text
@@ -208,18 +244,12 @@ async def async_generate_summary_and_action_items(
     if not full_transcript.strip():
         return {"summary": "", "action_items": ""}
 
-    key = api_key or os.environ.get("GROQ_API_KEY") or GROQ_API_KEY
-    if not key:
+    cfg = get_llm_config(api_key=api_key, model=model)
+    if not cfg["key"]:
         return {"summary": "", "action_items": ""}
 
-    model_name = model or os.environ.get("GROQ_MODEL") or GROQ_MODEL
-
-    headers = {
-        "Authorization": f"Bearer {key}",
-        "Content-Type": "application/json",
-    }
     payload = {
-        "model": model_name,
+        "model": cfg["model"],
         "messages": [
             {"role": "system", "content": SUMMARY_SYSTEM_PROMPT},
             {"role": "user", "content": f"Full Clean Transcript:\n\n{full_transcript[:25000]}"},
@@ -229,7 +259,7 @@ async def async_generate_summary_and_action_items(
 
     for attempt in range(max_retries):
         try:
-            resp = await client.post(GROQ_URL, json=payload, headers=headers, timeout=45.0)
+            resp = await client.post(cfg["url"], json=payload, headers=cfg["headers"], timeout=45.0)
             if resp.status_code == 200:
                 content = resp.json()["choices"][0]["message"]["content"].strip()
                 
@@ -269,3 +299,92 @@ def search_kb(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
     model = get_embedding_model()
     query_embedding = model.encode([query])[0].tolist()
     return db.search_chunks(query_embedding, top_k=top_k)
+
+
+QA_SYSTEM_PROMPT = (
+    "You are an AI intelligence assistant answering questions and synthesizing knowledge based on transcribed audio and video records from the database.\n\n"
+    "Instructions:\n"
+    "1. If the user asks to 'summarize' or requests an overview, synthesize the core themes, speaker arguments, and key takeaways from the provided excerpts into a clean executive summary.\n"
+    "2. If the user asks a specific question, answer it directly, accurately, and concisely using the provided transcript excerpts.\n"
+    "3. Ground all statements in the excerpts. Cite timestamps and source files (e.g. '[09:54 - 10:25]') whenever quoting or referencing details.\n"
+    "4. If the excerpts do not contain enough context, clearly explain what is covered and note the missing information.\n"
+    "5. Format your response cleanly using Markdown with bullet points, bold key terms, and sections where appropriate."
+)
+
+
+async def ask_kb(
+    query: str,
+    top_k: int = 5,
+    api_key: Optional[str] = None,
+    model: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Retrieves top matching chunks and prompts the configured LLM to synthesize a grounded answer."""
+    import httpx
+    results = search_kb(query=query, top_k=top_k)
+    if not results:
+        return {
+            "answer": "No relevant transcripts found in the knowledge base.",
+            "sources": [],
+            "provider": "None",
+            "model": "None",
+        }
+
+    context_snippets = []
+    for idx, r in enumerate(results, 1):
+        m_start = int(r["start_time"] // 60)
+        s_start = int(r["start_time"] % 60)
+        m_end = int(r["end_time"] // 60)
+        s_end = int(r["end_time"] % 60)
+        ts = f"{m_start:02d}:{s_start:02d} - {m_end:02d}:{s_end:02d}"
+        context_snippets.append(
+            f"--- Excerpt {idx} (File: {r['source_file']}, Time: {ts}) ---\n{r['text']}"
+        )
+
+    context_str = "\n\n".join(context_snippets)
+    user_prompt = f"Transcript Excerpts:\n{context_str}\n\nUser Question / Instruction:\n{query}"
+
+    cfg = get_llm_config(api_key=api_key, model=model)
+    if not cfg["key"]:
+        return {
+            "answer": "⚠️ **LLM API Key Not Configured**\n\nPlease configure `GROQ_API_KEY` (recommended for ultra-fast Llama 3.1) or `OPENROUTER_API_KEY` in your `.env` file to enable AI synthesis.\n\nHere are the top retrieved transcript moments from semantic search:\n\n" + context_str,
+            "sources": results,
+            "provider": "None",
+            "model": "None",
+        }
+
+    payload = {
+        "model": cfg["model"],
+        "messages": [
+            {"role": "system", "content": QA_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": 0.2,
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(cfg["url"], json=payload, headers=cfg["headers"], timeout=35.0)
+            if resp.status_code == 200:
+                data = resp.json()
+                answer = data["choices"][0]["message"]["content"].strip()
+                return {
+                    "answer": answer,
+                    "sources": results,
+                    "provider": cfg["provider"],
+                    "model": cfg["model"],
+                }
+            else:
+                return {
+                    "answer": f"⚠️ **LLM Provider Error ({resp.status_code})**: {resp.text}\n\n*Tip: Check that your API key in `.env` has valid credits or model access.*",
+                    "sources": results,
+                    "provider": cfg["provider"],
+                    "model": cfg["model"],
+                }
+    except Exception as e:
+        logger.error(f"Error during Q&A synthesis: {e}")
+        return {
+            "answer": f"Failed to generate answer: {str(e)}",
+            "sources": results,
+            "provider": cfg["provider"],
+            "model": cfg["model"],
+        }

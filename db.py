@@ -37,6 +37,77 @@ def get_db_pool():
     return _db_pool
 
 
+def test_connection_params(config: Dict[str, Any]) -> Tuple[bool, str]:
+    """Tests connecting to PostgreSQL/Supabase with the given parameters and checks pgvector."""
+    import psycopg2
+    try:
+        conn = psycopg2.connect(
+            dbname=config.get("dbname", "postgres"),
+            user=config.get("user", "postgres"),
+            password=config.get("password", "postgres"),
+            host=config.get("host", "localhost"),
+            port=int(config.get("port", 5432)),
+            connect_timeout=5,
+        )
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1;")
+            # Check vector extension
+            cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+        conn.commit()
+        conn.close()
+        return True, "Successfully connected and verified pgvector extension."
+    except Exception as e:
+        logger.warning(f"Database test connection failed: {e}")
+        return False, str(e)
+
+
+def update_db_config(new_config: Dict[str, Any]) -> Tuple[bool, str]:
+    """
+    Tests and updates runtime DB configuration, re-establishes connection pool,
+    and runs idempotent schema migrations.
+    """
+    global _db_pool, DB_CONFIG
+    
+    ok, msg = test_connection_params(new_config)
+    if not ok:
+        return False, f"Connection test failed: {msg}"
+    
+    if _db_pool is not None:
+        try:
+            _db_pool.closeall()
+        except Exception as e:
+            logger.warning(f"Error closing old pool: {e}")
+        _db_pool = None
+    
+    DB_CONFIG["dbname"] = new_config.get("dbname", "postgres")
+    DB_CONFIG["user"] = new_config.get("user", "postgres")
+    DB_CONFIG["password"] = new_config.get("password", "postgres")
+    DB_CONFIG["host"] = new_config.get("host", "localhost")
+    DB_CONFIG["port"] = int(new_config.get("port", 5432))
+    
+    try:
+        get_db_pool()
+        init_db()
+        return True, f"Connected to {DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['dbname']} successfully!"
+    except Exception as e:
+        logger.error(f"Failed to re-initialize database with new config: {e}")
+        return False, str(e)
+
+
+def get_current_db_config() -> Dict[str, Any]:
+    """Returns safe masked database configuration information."""
+    host = DB_CONFIG.get("host", "localhost")
+    is_supabase = "supabase" in host.lower()
+    return {
+        "host": host,
+        "port": DB_CONFIG.get("port", 5432),
+        "dbname": DB_CONFIG.get("dbname", "transcripts_agile"),
+        "user": DB_CONFIG.get("user", "postgres"),
+        "is_supabase": is_supabase,
+        "is_connected": _db_pool is not None
+    }
+
+
 @contextmanager
 def get_db_connection():
     pool = get_db_pool()
@@ -439,6 +510,30 @@ def get_full_job_transcript(job_id: str) -> str:
         )
         rows = cur.fetchall()
         return "\n\n".join(r[0] for r in rows if r[0])
+
+
+def get_job_chunks(job_id: str) -> List[Dict[str, Any]]:
+    """Returns all chunks with timestamps and text for PDF and document export."""
+    with get_db_cursor(commit=False) as cur:
+        cur.execute(
+            """
+            SELECT chunk_index, start_time, end_time, COALESCE(text_corrected, text_raw, text) AS text
+            FROM transcript_chunks
+            WHERE job_id = %s
+            ORDER BY chunk_index ASC;
+            """,
+            (job_id,)
+        )
+        rows = cur.fetchall()
+        return [
+            {
+                "chunk_index": r[0],
+                "start_time": float(r[1]),
+                "end_time": float(r[2]),
+                "text": r[3],
+            }
+            for r in rows
+        ]
 
 
 def save_job_summary(job_id: str, summary: str, action_items: str):
