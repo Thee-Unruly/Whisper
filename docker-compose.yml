@@ -26,7 +26,7 @@ services:
     container_name: whisper_pgadmin
     restart: unless-stopped
     environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@signal.local}
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@admin.com}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
       PGADMIN_CONFIG_SERVER_MODE: "False"
     volumes:
@@ -40,7 +40,7 @@ services:
     networks:
       - whisper_net
 
-  # 3. Application: FastAPI + Whisper + SentenceTransformers Pipeline
+  # 3. Application: FastAPI + faster-whisper (CTranslate2) + FastEmbed (ONNX) Pipeline
   app:
     build:
       context: .

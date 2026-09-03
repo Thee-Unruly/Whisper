@@ -1185,6 +1185,123 @@
             background: rgba(0, 242, 254, 0.25);
             box-shadow: 0 0 10px rgba(0, 242, 254, 0.35);
         }
+
+        /* Submodule Selector & Badges */
+        .submodule-badge-preview {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+            color: var(--cyan);
+            background: rgba(0, 242, 254, 0.08);
+            border: 1px solid rgba(0, 242, 254, 0.25);
+            padding: 3px 8px;
+            border-radius: var(--radius-full);
+            margin-top: 5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+        }
+
+        .submodule-filter-wrap {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(14, 20, 32, 0.85);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            padding: 3px 10px;
+        }
+
+        .submodule-filter-select {
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            font-size: 12px;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-weight: 600;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .submodule-filter-select option {
+            background: #0B0F19;
+            color: var(--text-primary);
+        }
+
+        .result-submodule-pill {
+            background: rgba(121, 40, 202, 0.18);
+            color: #D8B4FE;
+            border: 1px solid rgba(121, 40, 202, 0.35);
+            font-size: 10px;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+            padding: 2px 7px;
+            border-radius: var(--radius-full);
+        }
+
+        /* Submodules Inventory Table in Modal */
+        .submodules-inventory-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 10px;
+            max-height: 160px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .submodule-inventory-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 5px 10px;
+            background: rgba(14, 20, 32, 0.6);
+            border-radius: var(--radius-sm);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            font-size: 11.5px;
+        }
+
+        .submodule-inventory-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .submodule-inventory-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10.5px;
+            color: var(--text-muted);
+        }
+
+        .btn-danger {
+            background: rgba(244, 63, 94, 0.15);
+            border: 1px solid rgba(244, 63, 94, 0.4);
+            color: #FDA4AF;
+            padding: 8px 14px;
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-danger:hover {
+            background: rgba(244, 63, 94, 0.3);
+            border-color: var(--rose);
+            color: #FFF;
+            box-shadow: 0 0 15px rgba(244, 63, 94, 0.3);
+        }
     </style>
 </head>
 
@@ -1259,8 +1376,29 @@
                 </div>
             </div>
 
-            <!-- Controls Grid -->
-            <div class="controls-grid">
+            <!-- Controls: Submodule (full width) -->
+            <div class="control-group" style="margin-bottom: 8px;">
+                <label for="submoduleSelect">🏢 Target Submodule</label>
+                <select id="submoduleSelect" onchange="updateSubmoduleBadge()" required style="width:100%;">
+                    <option value="" selected disabled>— Select Submodule —</option>
+                    <option value="01_credit">01. Credit</option>
+                    <option value="02_credit_portal">02. Credit Portal</option>
+                    <option value="02_finance">02. Finance</option>
+                    <option value="03_e_recruitment">03. E-Recruitment</option>
+                    <option value="04_procurement">04. Procurement</option>
+                    <option value="05_e_procurement">05. E-Procurement</option>
+                    <option value="06_treasury">06. Treasury</option>
+                    <option value="07_grc">07. GRC</option>
+                    <option value="08_hr">08. HR</option>
+                    <option value="09_payroll">09. Payroll</option>
+                    <option value="10_edms">10. EDMS</option>
+                    <option value="11_power_bi">11. Power BI</option>
+                </select>
+                <div class="submodule-badge-preview" id="submoduleBadge" style="opacity:0.4;">📍 No submodule selected</div>
+            </div>
+
+            <!-- Controls: Whisper Model + Chunk Window -->
+            <div class="controls-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 8px;">
                 <div class="control-group">
                     <label for="modelSelect">Whisper Model</label>
                     <select id="modelSelect">
@@ -1270,9 +1408,8 @@
                         <option value="medium">medium (Studio Quality)</option>
                     </select>
                 </div>
-
                 <div class="control-group">
-                    <label for="chunkSeconds">Chunk Window</label>
+                    <label for="chunkSeconds">Chunk Window (s)</label>
                     <input type="number" id="chunkSeconds" value="30.0" min="10" max="120" step="5">
                 </div>
             </div>
@@ -1340,7 +1477,25 @@
                         <div class="deck-subtitle">Groq / LLM retrieval-augmented generation across indexed audio chunks</div>
                     </div>
                 </div>
-                <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <div class="submodule-filter-wrap">
+                        <span style="font-size: 11px; color: var(--text-muted);">🏢 Domain:</span>
+                        <select id="searchSubmoduleFilter" class="submodule-filter-select" onchange="runSearch()">
+                            <option value="all">🌐 All Submodules (Global)</option>
+                            <option value="01_credit">01. Credit</option>
+                            <option value="02_credit_portal">02. Credit Portal</option>
+                            <option value="02_finance">02. Finance</option>
+                            <option value="03_e_recruitment">03. E-Recruitment</option>
+                            <option value="04_procurement">04. Procurement</option>
+                            <option value="05_e_procurement">05. E-Procurement</option>
+                            <option value="06_treasury">06. Treasury</option>
+                            <option value="07_grc">07. GRC</option>
+                            <option value="08_hr">08. HR</option>
+                            <option value="09_payroll">09. Payroll</option>
+                            <option value="10_edms">10. EDMS</option>
+                            <option value="11_power_bi">11. Power BI</option>
+                        </select>
+                    </div>
                     <div class="search-mode-tabs">
                         <button type="button" class="search-mode-tab active" id="tabModeAi" onclick="setSearchMode('ai')" title="AI Generative Summary & Grounded Answering">⚡ AI Answer (RAG)</button>
                         <button type="button" class="search-mode-tab" id="tabModeRaw" onclick="setSearchMode('raw')" title="Raw Vector Distance Matches">🔍 Raw Chunks</button>
@@ -1418,11 +1573,95 @@
                 const res = await fetch(`${API_BASE}/stats`);
                 const data = await res.json();
                 statsEl.textContent = `${data.total_chunks} Chunks · ${data.total_files} Files in DB`;
+                if (data.submodules) {
+                    renderSubmodulesInventory(data.submodules);
+                }
             } catch {
                 statsEl.textContent = "Offline";
             }
         }
+
+        async function loadSubmodules() {
+            try {
+                const res = await fetch(`${API_BASE}/api/submodules`);
+                if (!res.ok) return;
+                const data = await res.json();
+                const submodules = data.submodules || [];
+                if (!submodules.length) return;
+
+                // Populate Ingestion Deck Submodule Select
+                const selectEl = document.getElementById("submoduleSelect");
+                if (selectEl) {
+                    const currentVal = selectEl.value; // preserve user's current pick (may be "")
+                    selectEl.innerHTML =
+                        `<option value="" ${!currentVal ? 'selected' : ''} disabled>\u2014 Select Submodule \u2014</option>` +
+                        submodules.map(s =>
+                            `<option value="${s.code}" ${s.code === currentVal ? 'selected' : ''}>${escapeHtml(s.name)}</option>`
+                        ).join("");
+                    updateSubmoduleBadge();
+                }
+
+                // Populate Search Filter Select
+                const filterEl = document.getElementById("searchSubmoduleFilter");
+                if (filterEl) {
+                    const currentFilter = filterEl.value;
+                    filterEl.innerHTML = `
+                        <option value="all" ${currentFilter === 'all' ? 'selected' : ''}>🌐 All Submodules (Global)</option>
+                        ${submodules.map(s => `
+                            <option value="${s.code}" ${s.code === currentFilter ? 'selected' : ''}>
+                                ${escapeHtml(s.name)}
+                            </option>
+                        `).join("")}
+                    `;
+                }
+
+                renderSubmodulesInventory(submodules);
+            } catch (e) {
+                console.error("Failed to load submodules:", e);
+            }
+        }
+
+        function updateSubmoduleBadge() {
+            const select = document.getElementById("submoduleSelect");
+            const badge = document.getElementById("submoduleBadge");
+            if (!select || !badge) return;
+            if (!select.value) {
+                badge.textContent = "📍 No submodule selected";
+                badge.style.opacity = "0.4";
+            } else {
+                const selectedText = select.options[select.selectedIndex]?.text || "";
+                badge.textContent = `📍 Routing target: ${selectedText}`;
+                badge.style.opacity = "1";
+            }
+        }
+
+        function renderSubmodulesInventory(submodules) {
+            const listEl = document.getElementById("submodulesInventoryList");
+            const totalCountEl = document.getElementById("submodulesTotalCount");
+            if (!listEl) return;
+            if (totalCountEl) totalCountEl.textContent = `${submodules.length} Modules Registered`;
+
+            if (!submodules || !submodules.length) {
+                listEl.innerHTML = `<div style="text-align:center; color:var(--text-muted); font-size:11px; padding:10px;">No submodules registered</div>`;
+                return;
+            }
+
+            listEl.innerHTML = submodules.map(s => `
+                <div class="submodule-inventory-row">
+                    <div class="submodule-inventory-name">
+                        <span>🏢</span>
+                        <span>${escapeHtml(s.name)}</span>
+                    </div>
+                    <div class="submodule-inventory-badge">
+                        <span style="color:var(--cyan); font-weight:600;">${s.indexed_chunks || 0}</span> chunks · 
+                        <span style="color:var(--emerald); font-weight:600;">${s.total_jobs || 0}</span> files
+                    </div>
+                </div>
+            `).join("");
+        }
+
         loadStats();
+        loadSubmodules();
 
         function appendLog(msg) {
             const term = document.getElementById("terminalLog");
@@ -1461,8 +1700,15 @@
             const term = document.getElementById("terminalLog");
             const synthCard = document.getElementById("synthesisCard");
 
+            const submodule = document.getElementById("submoduleSelect").value;
+            if (!submodule) {
+                appendLog("⚠️ Please select a target submodule before processing.");
+                document.getElementById("submoduleSelect").focus();
+                return;
+            }
+
             if (!fileInput.files.length) {
-                alert("Please select or drop an audio/video file first.");
+                appendLog("⚠️ Please select or drop an audio/video file first.");
                 return;
             }
 
@@ -1471,6 +1717,7 @@
             formData.append("model", document.getElementById("modelSelect").value);
             formData.append("chunk_seconds", document.getElementById("chunkSeconds").value);
             formData.append("skip_correction", document.getElementById("skipCorrection").checked);
+            formData.append("submodule", document.getElementById("submoduleSelect").value);
 
             btn.disabled = true;
             audioWave.classList.remove("paused");
@@ -1749,6 +1996,7 @@
         async function runSearch() {
             const query = document.getElementById("searchInput").value.trim();
             const topK = parseInt(document.getElementById("topK").value) || 5;
+            const submodule = document.getElementById("searchSubmoduleFilter")?.value || "all";
             const resultsEl = document.getElementById("searchResults");
             const countBadge = document.getElementById("resultCountBadge");
             const queryBtn = document.getElementById("queryBtn");
@@ -1770,7 +2018,7 @@
                     const res = await fetch(`${API_BASE}/ask`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ question: query, top_k: topK }),
+                        body: JSON.stringify({ question: query, top_k: topK, submodule: submodule }),
                     });
 
                     if (!res.ok) {
@@ -1808,11 +2056,13 @@
                         html += `<div class="section-subhead"><span>🔍</span> <span>Referenced Audio Moments & Vectors (${sources.length})</span></div>`;
                         html += sources.map(r => {
                             const matchPercent = Math.max(0, Math.min(100, (1 - (r.distance / 2)) * 100)).toFixed(1);
+                            const subTag = r.submodule_name || r.submodule_code || "General";
                             return `
                                 <div class="result-card">
                                     <div class="result-meta">
                                         <div style="display:flex; align-items:center; gap:8px;">
                                             <span class="result-time-pill">⏱️ ${formatTime(r.start_time)} &ndash; ${formatTime(r.end_time)}</span>
+                                            <span class="result-submodule-pill">${escapeHtml(subTag)}</span>
                                             <span class="result-file-badge" title="${escapeHtml(r.source_file)}">${escapeHtml(r.source_file)}</span>
                                         </div>
                                         <span class="result-score-pill">${matchPercent}% Match (${r.distance.toFixed(3)})</span>
@@ -1839,7 +2089,7 @@
                     const res = await fetch(`${API_BASE}/search`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ query, top_k: topK }),
+                        body: JSON.stringify({ query, top_k: topK, submodule: submodule }),
                     });
 
                     if (!res.ok) throw new Error("Search query failed");
@@ -1854,11 +2104,13 @@
 
                     resultsEl.innerHTML = results.map(r => {
                         const matchPercent = Math.max(0, Math.min(100, (1 - (r.distance / 2)) * 100)).toFixed(1);
+                        const subTag = r.submodule_name || r.submodule_code || "General";
                         return `
                             <div class="result-card">
                                 <div class="result-meta">
                                     <div style="display:flex; align-items:center; gap:8px;">
                                         <span class="result-time-pill">⏱️ ${formatTime(r.start_time)} &ndash; ${formatTime(r.end_time)}</span>
+                                        <span class="result-submodule-pill">${escapeHtml(subTag)}</span>
                                         <span class="result-file-badge" title="${escapeHtml(r.source_file)}">${escapeHtml(r.source_file)}</span>
                                     </div>
                                     <span class="result-score-pill">${matchPercent}% Match (${r.distance.toFixed(3)})</span>
@@ -2096,6 +2348,40 @@
                 btn.textContent = "💾 Save & Switch DB";
             }
         }
+        async function confirmPurgeDatabase() {
+            if (!confirm("⚠️ Are you sure you want to PURGE the database?\n\nThis will completely erase all current jobs and transcript chunks, and re-create the restructured schema with all 12 enterprise submodules.\n\nProceed?")) {
+                return;
+            }
+            const btn = document.getElementById("dbPurgeBtn");
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = "Purging & Rebuilding...";
+            }
+            hideDbStatus();
+            try {
+                const res = await fetch(`${API_BASE}/api/db/purge`, { method: "POST" });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || "Database purge failed");
+                showDbStatus(true, data.message || "Database purged and restructured successfully!");
+                loadStats();
+                loadSubmodules();
+                document.getElementById("searchResults").innerHTML = `
+                    <div class="empty-results">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                        </svg>
+                        <div>Database has been freshly purged and restructured. All 12 enterprise submodules are ready for ingestion.</div>
+                    </div>
+                `;
+            } catch (err) {
+                showDbStatus(false, err.message);
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = "🗑️ Purge & Restructure DB";
+                }
+            }
+        }
     </script>
 
     <!-- Database Configuration Modal Dialog -->
@@ -2104,7 +2390,7 @@
             <div class="db-modal-header">
                 <div class="db-modal-title">
                     <span style="font-size: 20px;">⚡</span>
-                    <span>Vector Database Configuration</span>
+                    <span>Vector Database & Submodules Configuration</span>
                 </div>
                 <button class="db-close-btn" onclick="closeDbModal()" title="Close">&times;</button>
             </div>
@@ -2161,8 +2447,34 @@
             <!-- Live Status Feedback Banner -->
             <div class="db-status-banner" id="dbStatusBanner"></div>
 
+            <!-- Submodules Inventory Section -->
+            <div style="margin-top: 4px; border-top: 1px solid var(--border-subtle); padding-top: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span style="font-size: 11.5px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">
+                        🏢 Submodules Catalog & Inventory
+                    </span>
+                    <span id="submodulesTotalCount" style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--cyan); font-weight: 600;">
+                        12 Modules
+                    </span>
+                </div>
+                <div class="submodules-inventory-card" id="submodulesInventoryList">
+                    <!-- Populated dynamically via renderSubmodulesInventory() -->
+                </div>
+            </div>
+
+            <!-- Maintenance & Purge Action -->
+            <div style="border-top: 1px solid rgba(244,63,94,0.2); padding-top: 12px; margin-top: 4px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <div style="font-size: 12px; font-weight: 700; color: #FDA4AF;">⚠️ Database Maintenance</div>
+                    <div style="font-size: 10.5px; color: var(--text-muted);">Purge tables & rebuild clean submodules schema</div>
+                </div>
+                <button type="button" class="btn-danger" id="dbPurgeBtn" onclick="confirmPurgeDatabase()">
+                    🗑️ Purge & Restructure DB
+                </button>
+            </div>
+
             <!-- Actions -->
-            <div class="db-modal-actions">
+            <div class="db-modal-actions" style="margin-top: 6px;">
                 <button type="button" class="btn-secondary" id="dbTestBtn" onclick="testDbConnection()">
                     🔍 Test Connection
                 </button>

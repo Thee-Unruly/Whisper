@@ -2,8 +2,9 @@
 FastAPI backend for Signal Transcript Knowledge Base.
 Fully database-backed Level 1 architecture:
   - Non-blocking staged async workers
+  - Enterprise Submodules routing & isolation
   - Resilient PostgreSQL job & chunk state machine
-  - Cosine vector search with pgvector
+  - Cosine vector search with pgvector HNSW & full-text search
 
 Run:
     uvicorn main:app --reload --host 0.0.0.0 --port 8000
@@ -14,6 +15,7 @@ import shutil
 import uuid
 import asyncio
 import logging
+from typing import Optional, List, Dict, Any
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
@@ -39,7 +41,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initializes DB schema and launches concurrent in-process background worker loops."""
-    logger.info("Initializing database schema and indices...")
+    logger.info("Initializing database schema, submodules, and indices...")
     db.init_db()
 
     logger.info("Spawning in-process Level 1 stage worker tasks...")
@@ -57,7 +59,7 @@ async def lifespan(app: FastAPI):
     synth_task.cancel()
 
 
-app = FastAPI(title="Signal — Transcript Knowledge Base", lifespan=lifespan)
+app = FastAPI(title="Signal — Enterprise Neural Audio Knowledge Base", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -74,6 +76,13 @@ class DBConfigRequest(BaseModel):
     dbname: str = "postgres"
     user: str = "postgres"
     password: str
+
+
+class SubmoduleCreateRequest(BaseModel):
+    code: str
+    name: str
+    description: str = ""
+    db_target: Optional[str] = None
 
 
 @app.get("/health")
@@ -113,16 +122,70 @@ def set_db_config(req: DBConfigRequest):
     return {"ok": True, "message": message, "config": db.get_current_db_config()}
 
 
+@app.post("/api/db/purge")
+def purge_db():
+    """
+    Purges all existing records (jobs, chunks), drops tables,
+    and re-executes the clean restructured schema with all 12 enterprise submodules.
+    """
+    ok, message = db.purge_and_reinit_db()
+    if not ok:
+        raise HTTPException(status_code=500, detail=message)
+    
+    # Clean staging files
+    try:
+        for f in os.listdir(UPLOAD_DIR):
+            fpath = os.path.join(UPLOAD_DIR, f)
+            if os.path.isfile(fpath):
+                os.remove(fpath)
+    except Exception as e:
+        logger.warning(f"Could not purge uploads directory: {e}")
+
+    return {
+        "ok": True, 
+        "message": message, 
+        "stats": db.get_stats(),
+        "submodules": db.get_submodules()
+    }
+
+
+# ==========================================
+# Submodules Management Endpoints
+# ==========================================
+
+@app.get("/api/submodules")
+def list_submodules():
+    """Returns all available submodules with file and chunk counts."""
+    return {"submodules": db.get_submodules()}
+
+
+@app.post("/api/submodules")
+def create_submodule(req: SubmoduleCreateRequest):
+    """Creates a new custom submodule or updates an existing one."""
+    sub = db.add_or_update_submodule(
+        code=req.code,
+        name=req.name,
+        description=req.description,
+        db_target=req.db_target
+    )
+    return {"ok": True, "submodule": sub}
+
+
+# ==========================================
+# Ingestion & State Machine Endpoints
+# ==========================================
+
 @app.post("/process")
 async def process(
     file: UploadFile = File(...),
     model: str = Form("base"),
     chunk_seconds: float = Form(30.0),
     skip_correction: bool = Form(False),
+    submodule: str = Form("02_finance"),
 ):
     """
     Accepts an audio/video upload, stores it in staging, creates a 'queued'
-    job record in PostgreSQL, and returns the job_id immediately.
+    job record in PostgreSQL routed to the selected submodule, and returns the job_id.
     """
     if not file.filename:
         raise HTTPException(status_code=400, detail="Filename missing")
@@ -134,17 +197,21 @@ async def process(
     with open(dest_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # Persist queued job in PostgreSQL
+    file_size = os.path.getsize(dest_path) if os.path.exists(dest_path) else 0
+
+    # Persist queued job in PostgreSQL with target submodule
     job_id = db.create_job(
         source_filename=file.filename,
         file_path=dest_path,
         model_name=model,
         chunk_seconds=chunk_seconds,
         skip_correction=skip_correction,
+        submodule_code=submodule,
+        file_size_bytes=file_size,
     )
 
-    logger.info(f"Enqueued job {job_id[:8]} for '{file.filename}' (model={model}, skip_corr={skip_correction})")
-    return {"job_id": job_id}
+    logger.info(f"Enqueued job {job_id[:8]} for '{file.filename}' -> [{submodule}] (model={model})")
+    return {"job_id": job_id, "submodule": submodule}
 
 
 @app.get("/status/{job_id}")
@@ -168,6 +235,9 @@ def get_job_transcript(job_id: str):
         "job_id": job_id,
         "source_filename": job["source_filename"],
         "model_name": job.get("model_name", "base"),
+        "submodule_code": job.get("submodule_code", "02_finance"),
+        "submodule_name": job.get("submodule_name", "02. Finance"),
+        "duration_seconds": job.get("duration_seconds"),
         "summary": job["summary"],
         "action_items": job["action_items"],
         "full_text": full_text,
@@ -175,24 +245,30 @@ def get_job_transcript(job_id: str):
     }
 
 
+# ==========================================
+# Discovery & Search Endpoints
+# ==========================================
+
 class SearchRequest(BaseModel):
     query: str
     top_k: int = 5
+    submodule: Optional[str] = "all"
 
 
 class AskRequest(BaseModel):
     question: str
     top_k: int = 5
+    submodule: Optional[str] = "all"
 
 
 @app.post("/search")
 def search(req: SearchRequest):
-    """Semantic vector search using cosine distance (<=>)."""
+    """Semantic vector search using cosine distance (<=>), optionally scoped to a submodule."""
     if not req.query.strip():
         return {"results": []}
     try:
-        results = pipeline.search_kb(query=req.query, top_k=req.top_k)
-        return {"results": results}
+        results = pipeline.search_kb(query=req.query, top_k=req.top_k, submodule=req.submodule)
+        return {"results": results, "submodule": req.submodule}
     except Exception as e:
         logger.error(f"Search query failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -200,11 +276,11 @@ def search(req: SearchRequest):
 
 @app.post("/ask")
 async def ask(req: AskRequest):
-    """Answers user question using retrieved transcript chunks and Groq LLM synthesis."""
+    """Answers user question using retrieved transcript chunks and Groq LLM synthesis, optionally scoped to a submodule."""
     if not req.question.strip():
         return {"answer": "Please provide a valid question.", "sources": []}
     try:
-        response = await pipeline.ask_kb(query=req.question, top_k=req.top_k)
+        response = await pipeline.ask_kb(query=req.question, top_k=req.top_k, submodule=req.submodule)
         return response
     except Exception as e:
         logger.error(f"Q&A failed: {e}", exc_info=True)
@@ -213,7 +289,7 @@ async def ask(req: AskRequest):
 
 @app.get("/stats")
 def stats():
-    """Returns database chunk and file counts."""
+    """Returns database chunk and file counts, plus submodules breakdown."""
     return db.get_stats()
 
 

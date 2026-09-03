@@ -159,6 +159,49 @@ class TestDBFormatting(unittest.TestCase):
         formatted = db._vector_literal(vec)
         self.assertEqual(formatted, "[0.123,-0.456,0.789]")
 
+    def test_submodules_catalog(self):
+        submodules = db.get_submodules()
+        self.assertGreaterEqual(len(submodules), 12)
+        codes = [s["code"] for s in submodules]
+        self.assertIn("01_credit", codes)
+        self.assertIn("02_finance", codes)
+        self.assertIn("04_procurement", codes)
+        self.assertIn("08_hr", codes)
+        self.assertIn("11_power_bi", codes)
+
+    def test_job_and_chunk_submodule_routing(self):
+        # Create test job routed to 02_finance
+        job_id = db.create_job(
+            source_filename="test_q3_financials.mp4",
+            file_path="uploads/test.mp4",
+            model_name="base",
+            submodule_code="02_finance",
+            duration_seconds=120.0
+        )
+        self.assertTrue(job_id)
+
+        job_status = db.get_job_status(job_id)
+        self.assertIsNotNone(job_status)
+        self.assertEqual(job_status["submodule_code"], "02_finance")
+        self.assertEqual(job_status["submodule_name"], "02. Finance")
+
+        # Save chunks under 02_finance
+        chunks = [
+            {"start": 0.0, "end": 30.0, "text": "Q3 budget analysis and fiscal policies."},
+            {"start": 30.0, "end": 60.0, "text": "Financial reconciliation completed."}
+        ]
+        db.save_raw_chunks(
+            job_id,
+            "test_q3_financials.mp4",
+            chunks,
+            submodule_code="02_finance",
+            submodule_name="02. Finance"
+        )
+
+        job_chunks = db.get_job_chunks(job_id)
+        self.assertEqual(len(job_chunks), 2)
+        self.assertEqual(job_chunks[0]["submodule_code"], "02_finance")
+
 
 if __name__ == "__main__":
     unittest.main()

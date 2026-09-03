@@ -102,9 +102,9 @@ _embedding_model = None
 def get_whisper_model(model_name: str):
     """Loads faster-whisper WhisperModel lazily with optimal quantization."""
     from faster_whisper import WhisperModel
-    import torch
+    import ctranslate2
     if model_name not in _whisper_models:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = "cuda" if ctranslate2.get_cuda_device_count() > 0 else "cpu"
         compute_type = "float16" if device == "cuda" else "int8"
         logger.info(f"Loading faster-whisper model '{model_name}' on device='{device}' (compute_type='{compute_type}')...")
         _whisper_models[model_name] = WhisperModel(
@@ -117,12 +117,12 @@ def get_whisper_model(model_name: str):
 
 
 def get_embedding_model():
-    """Loads SentenceTransformer model lazily and caches across calls."""
+    """Loads FastEmbed ONNX embedding model lazily and caches across calls (no PyTorch required)."""
     global _embedding_model
     if _embedding_model is None:
-        from sentence_transformers import SentenceTransformer
-        logger.info(f"Loading SentenceTransformer '{EMBEDDING_MODEL_NAME}'...")
-        _embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
+        from fastembed import TextEmbedding
+        logger.info(f"Loading FastEmbed (ONNX) model 'sentence-transformers/{EMBEDDING_MODEL_NAME}'...")
+        _embedding_model = TextEmbedding(model_name=f"sentence-transformers/{EMBEDDING_MODEL_NAME}")
     return _embedding_model
 
 
@@ -286,19 +286,20 @@ async def async_generate_summary_and_action_items(
 
 
 def embed_texts(texts: List[str]) -> List[List[float]]:
-    """Stage 3: Vectorized batch embedding via all-MiniLM-L6-v2."""
+    """Stage 3: Vectorized batch embedding via FastEmbed ONNX (all-MiniLM-L6-v2, no PyTorch)."""
     if not texts:
         return []
     model = get_embedding_model()
-    embeddings = model.encode(texts)
+    # fastembed.embed() returns a generator of numpy arrays
+    embeddings = list(model.embed(texts))
     return [emb.tolist() for emb in embeddings]
 
 
-def search_kb(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
-    """Embeds query and queries PostgreSQL using Cosine Distance (<=>)."""
+def search_kb(query: str, top_k: int = 5, submodule: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Embeds query and queries PostgreSQL using Cosine Distance (<=>), optionally filtered by submodule."""
     model = get_embedding_model()
-    query_embedding = model.encode([query])[0].tolist()
-    return db.search_chunks(query_embedding, top_k=top_k)
+    query_embedding = list(model.embed([query]))[0].tolist()
+    return db.search_chunks(query_embedding, top_k=top_k, submodule_code=submodule)
 
 
 QA_SYSTEM_PROMPT = (
@@ -306,7 +307,7 @@ QA_SYSTEM_PROMPT = (
     "Instructions:\n"
     "1. If the user asks to 'summarize' or requests an overview, synthesize the core themes, speaker arguments, and key takeaways from the provided excerpts into a clean executive summary.\n"
     "2. If the user asks a specific question, answer it directly, accurately, and concisely using the provided transcript excerpts.\n"
-    "3. Ground all statements in the excerpts. Cite timestamps and source files (e.g. '[09:54 - 10:25]') whenever quoting or referencing details.\n"
+    "3. Ground all statements in the excerpts. Cite timestamps, submodules, and source files (e.g. '[02. Finance | 09:54 - 10:25]') whenever quoting or referencing details.\n"
     "4. If the excerpts do not contain enough context, clearly explain what is covered and note the missing information.\n"
     "5. Format your response cleanly using Markdown with bullet points, bold key terms, and sections where appropriate."
 )
@@ -315,15 +316,17 @@ QA_SYSTEM_PROMPT = (
 async def ask_kb(
     query: str,
     top_k: int = 5,
+    submodule: Optional[str] = None,
     api_key: Optional[str] = None,
     model: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Retrieves top matching chunks and prompts the configured LLM to synthesize a grounded answer."""
+    """Retrieves top matching chunks (optionally scoped to a submodule) and prompts the configured LLM to synthesize a grounded answer."""
     import httpx
-    results = search_kb(query=query, top_k=top_k)
+    results = search_kb(query=query, top_k=top_k, submodule=submodule)
     if not results:
+        sub_msg = f" in submodule '{submodule}'" if submodule and submodule.lower() not in ("all", "*") else ""
         return {
-            "answer": "No relevant transcripts found in the knowledge base.",
+            "answer": f"No relevant transcripts found{sub_msg} in the knowledge base.",
             "sources": [],
             "provider": "None",
             "model": "None",
@@ -336,8 +339,9 @@ async def ask_kb(
         m_end = int(r["end_time"] // 60)
         s_end = int(r["end_time"] % 60)
         ts = f"{m_start:02d}:{s_start:02d} - {m_end:02d}:{s_end:02d}"
+        sub_tag = r.get("submodule_name") or r.get("submodule_code") or "General"
         context_snippets.append(
-            f"--- Excerpt {idx} (File: {r['source_file']}, Time: {ts}) ---\n{r['text']}"
+            f"--- Excerpt {idx} (Submodule: [{sub_tag}], File: {r['source_file']}, Time: {ts}) ---\n{r['text']}"
         )
 
     context_str = "\n\n".join(context_snippets)

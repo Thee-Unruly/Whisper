@@ -72,8 +72,11 @@ async def asr_stage_worker(poll_interval: float = 1.0):
             model_name = job["model_name"]
             chunk_seconds = job["chunk_seconds"]
             skip_correction = job["skip_correction"]
+            submodule_code = job.get("submodule_code", "02_finance")
+            submodule_name = job.get("submodule_name", "02. Finance")
+            submodule_id = job.get("submodule_id")
 
-            logger.info(f"[Stage 1 ASR] Processing job {job_id[:8]} ({source_filename})...")
+            logger.info(f"[Stage 1 ASR] Processing job {job_id[:8]} ({source_filename}) for [{submodule_name}]...")
 
             try:
                 # Heavy Whisper inference outside any DB transaction
@@ -87,8 +90,16 @@ async def asr_stage_worker(poll_interval: float = 1.0):
                 chunks = pipeline.chunk_segments(segments, chunk_seconds)
                 logger.info(f"[Stage 1 ASR] Generated {len(chunks)} chunks for job {job_id[:8]}. Persisting...")
 
-                # Short transaction to bulk insert chunks
-                db.save_raw_chunks(job_id, source_filename, chunks, skip_correction=skip_correction)
+                # Short transaction to bulk insert chunks with submodule metadata
+                db.save_raw_chunks(
+                    job_id, 
+                    source_filename, 
+                    chunks, 
+                    skip_correction=skip_correction,
+                    submodule_code=submodule_code,
+                    submodule_name=submodule_name,
+                    submodule_id=submodule_id
+                )
 
             except Exception as exc:
                 logger.error(f"[Stage 1 ASR] Job {job_id[:8]} failed: {exc}", exc_info=True)
