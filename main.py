@@ -256,12 +256,14 @@ class SearchRequest(BaseModel):
 
 
 class AskRequest(BaseModel):
-    question: str
+    query: Optional[str] = None
+    question: Optional[str] = None
     top_k: int = 5
     submodule: Optional[str] = "all"
 
 
 @app.post("/search")
+@app.post("/api/search")
 def search(req: SearchRequest):
     """Semantic vector search using cosine distance (<=>), optionally scoped to a submodule."""
     if not req.query.strip():
@@ -275,12 +277,14 @@ def search(req: SearchRequest):
 
 
 @app.post("/ask")
+@app.post("/api/ask")
 async def ask(req: AskRequest):
     """Answers user question using retrieved transcript chunks and Groq LLM synthesis, optionally scoped to a submodule."""
-    if not req.question.strip():
+    q = (req.question or req.query or "").strip()
+    if not q:
         return {"answer": "Please provide a valid question.", "sources": []}
     try:
-        response = await pipeline.ask_kb(query=req.question, top_k=req.top_k, submodule=req.submodule)
+        response = await pipeline.ask_kb(query=q, top_k=req.top_k, submodule=req.submodule)
         return response
     except Exception as e:
         logger.error(f"Q&A failed: {e}", exc_info=True)

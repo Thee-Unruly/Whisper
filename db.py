@@ -927,11 +927,11 @@ def search_chunks(
     
     # Check if submodule filtering applies
     filter_clause = ""
-    params = [vec_str, vec_str]
+    params = [vec_str]
     if submodule_code and submodule_code.lower() not in ("all", "*", ""):
         filter_clause = "AND (submodule_code = %s OR LOWER(submodule_name) = LOWER(%s))"
         params.extend([submodule_code, submodule_code])
-    params.append(top_k)
+    params.extend([vec_str, top_k])
 
     with get_db_cursor(commit=False) as cur:
         cur.execute(
