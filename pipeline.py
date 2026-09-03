@@ -130,10 +130,24 @@ def get_embedding_model():
 # Pipeline Stage Functions
 # ==========================================
 
-def transcribe_file(audio_path: str, model_name: str = "base") -> List[Dict[str, Any]]:
-    """Stage 1: Transcribe audio using faster-whisper with Silero VAD filter."""
+WHISPER_INITIAL_PROMPT = (
+    "Enterprise business software, ERP, Business Central, credit portal, "
+    "TMRC, PML, DCB, user setup, approval workflows, loans, financial accounting."
+)
+
+
+def transcribe_file(audio_path: str, model_name: str = "small", language: str = "en") -> List[Dict[str, Any]]:
+    """Stage 1: Transcribe audio using faster-whisper with Silero VAD filter, domain vocabulary prompt, and English lock."""
     model = get_whisper_model(model_name)
-    segments_generator, info = model.transcribe(audio_path, beam_size=5, vad_filter=True)
+    segments_generator, info = model.transcribe(
+        audio_path,
+        beam_size=5,
+        language=language,
+        vad_filter=True,
+        initial_prompt=WHISPER_INITIAL_PROMPT,
+        temperature=0.0,
+        condition_on_previous_text=False
+    )
     
     segments = []
     for seg in segments_generator:
