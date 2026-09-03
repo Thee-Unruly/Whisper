@@ -914,29 +914,94 @@ def get_stats() -> Dict[str, Any]:
         }
 
 
+def _clean_or_tsquery(text: str) -> str:
+    """Extracts alphanumeric words and joins them with | for broad lexical recall."""
+    import re
+    words = re.findall(r"[a-zA-Z0-9]+", text)
+    stop_words = {
+        "what", "is", "the", "a", "an", "and", "or", "in", "on", "at", "to", 
+        "for", "of", "with", "after", "before", "from", "by", "how", "why", 
+        "do", "does", "did", "this", "that", "these", "those", "are", "were", 
+        "be", "been", "there", "their", "they", "we", "you", "i", "can", "could",
+        "should", "would", "which", "who", "whom", "will", "shall", "into"
+    }
+    keywords = [w for w in words if len(w) > 2 and w.lower() not in stop_words]
+    if not keywords:
+        keywords = [w for w in words if len(w) > 1]
+    return " | ".join(keywords) if keywords else ""
+
+
 def search_chunks(
     query_embedding: List[float], 
+    query_text: Optional[str] = None,
     top_k: int = 5, 
     submodule_code: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """
-    Performs cosine vector search (<=>) on indexed transcript chunks,
-    optionally filtering by specific enterprise submodule.
+    Performs Reciprocal Rank Fusion (RRF) Hybrid Search combining:
+      1. Dense Cosine Vector Similarity (pgvector HNSW)
+      2. Full-Text Lexical Ranking (PostgreSQL tsvector / GIN with to_tsquery)
+    Optionally scoped to a specific enterprise submodule.
     """
     vec_str = _vector_literal(query_embedding)
+    or_tsquery = _clean_or_tsquery(query_text or "")
     
-    # Check if submodule filtering applies
-    filter_clause = ""
-    params = [vec_str]
+    # Submodule filter clause
+    filter_sub = ""
+    params_sub = []
     if submodule_code and submodule_code.lower() not in ("all", "*", ""):
-        filter_clause = "AND (submodule_code = %s OR LOWER(submodule_name) = LOWER(%s))"
-        params.extend([submodule_code, submodule_code])
-    params.extend([vec_str, top_k])
+        filter_sub = "AND (submodule_code = %s OR LOWER(submodule_name) = LOWER(%s))"
+        params_sub = [submodule_code, submodule_code]
 
-    with get_db_cursor(commit=False) as cur:
-        cur.execute(
-            f"""
+    if or_tsquery:
+        sql = f"""
+            WITH vector_matches AS (
+                SELECT 
+                    id,
+                    ROW_NUMBER() OVER (ORDER BY embedding <=> %s::vector ASC) AS rank_vec,
+                    embedding <=> %s::vector AS vec_dist
+                FROM transcript_chunks
+                WHERE embedding IS NOT NULL {filter_sub}
+                LIMIT 50
+            ),
+            text_matches AS (
+                SELECT 
+                    id,
+                    ROW_NUMBER() OVER (ORDER BY ts_rank_cd(tsv, to_tsquery('english', %s)) DESC) AS rank_text,
+                    ts_rank_cd(tsv, to_tsquery('english', %s)) AS text_score
+                FROM transcript_chunks
+                WHERE tsv @@ to_tsquery('english', %s) {filter_sub}
+                LIMIT 50
+            ),
+            combined AS (
+                SELECT 
+                    COALESCE(v.id, t.id) AS id,
+                    COALESCE(v.vec_dist, 1.0) AS vec_dist,
+                    COALESCE(t.text_score, 0.0) AS text_score,
+                    (COALESCE(1.0 / (60 + v.rank_vec), 0.0) + COALESCE(1.0 / (60 + t.rank_text), 0.0)) AS rrf_score
+                FROM vector_matches v
+                FULL OUTER JOIN text_matches t ON v.id = t.id
+            )
             SELECT 
+                tc.id,
+                COALESCE(tc.source_file, 'unknown') AS source_file,
+                tc.start_time,
+                tc.end_time,
+                COALESCE(tc.text_corrected, tc.text_raw, tc.text) AS chunk_text,
+                c.vec_dist AS distance,
+                tc.submodule_code,
+                tc.submodule_name,
+                tc.speaker
+            FROM combined c
+            JOIN transcript_chunks tc ON tc.id = c.id
+            ORDER BY c.rrf_score DESC, c.vec_dist ASC
+            LIMIT %s;
+        """
+        params = [vec_str, vec_str] + params_sub + [or_tsquery, or_tsquery, or_tsquery] + params_sub + [top_k]
+    else:
+        sql = f"""
+            SELECT 
+                id,
                 COALESCE(source_file, 'unknown') AS source_file,
                 start_time,
                 end_time,
@@ -946,23 +1011,26 @@ def search_chunks(
                 submodule_name,
                 speaker
             FROM transcript_chunks
-            WHERE embedding IS NOT NULL {filter_clause}
+            WHERE embedding IS NOT NULL {filter_sub}
             ORDER BY embedding <=> %s::vector ASC
             LIMIT %s;
-            """,
-            tuple(params)
-        )
+        """
+        params = [vec_str] + params_sub + [vec_str, top_k]
+
+    with get_db_cursor(commit=False) as cur:
+        cur.execute(sql, tuple(params))
         rows = cur.fetchall()
         return [
             {
-                "source_file": r[0],
-                "start_time": float(r[1]),
-                "end_time": float(r[2]),
-                "text": r[3],
-                "distance": float(r[4]),
-                "submodule_code": r[5],
-                "submodule_name": r[6],
-                "speaker": r[7],
+                "id": str(r[0]),
+                "source_file": r[1],
+                "start_time": float(r[2]),
+                "end_time": float(r[3]),
+                "text": r[4],
+                "distance": float(r[5]),
+                "submodule_code": r[6],
+                "submodule_name": r[7],
+                "speaker": r[8],
             }
             for r in rows
         ]

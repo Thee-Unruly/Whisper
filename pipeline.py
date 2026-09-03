@@ -313,10 +313,15 @@ def embed_texts(texts: List[str]) -> List[List[float]]:
 
 
 def search_kb(query: str, top_k: int = 5, submodule: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Embeds query and queries PostgreSQL using Cosine Distance (<=>), optionally filtered by submodule."""
+    """Performs RRF Hybrid Search (pgvector dense cosine + Full-Text Search), optionally filtered by submodule."""
     model = get_embedding_model()
     query_embedding = list(model.embed([query]))[0].tolist()
-    return db.search_chunks(query_embedding, top_k=top_k, submodule_code=submodule)
+    return db.search_chunks(
+        query_embedding=query_embedding,
+        query_text=query,
+        top_k=top_k,
+        submodule_code=submodule
+    )
 
 
 QA_SYSTEM_PROMPT = (
@@ -339,7 +344,9 @@ async def ask_kb(
 ) -> Dict[str, Any]:
     """Retrieves top matching chunks (optionally scoped to a submodule) and prompts the configured LLM to synthesize a grounded answer."""
     import httpx
-    results = search_kb(query=query, top_k=top_k, submodule=submodule)
+    # Retrieve wider context window (at least 8 chunks) to capture complete procedures across files
+    search_k = max(int(top_k or 5), 8)
+    results = search_kb(query=query, top_k=search_k, submodule=submodule)
     if not results:
         sub_msg = f" in submodule '{submodule}'" if submodule and submodule.lower() not in ("all", "*") else ""
         return {
