@@ -120,15 +120,15 @@ async def asr_stage_worker(poll_interval: float = 1.0):
 # Stage 2: Groq LLM Correction Worker Loop
 # ==========================================
 
-async def groq_stage_worker(rate_limit_per_minute: float = 30.0, poll_interval: float = 0.5):
+async def groq_stage_worker(rate_limit_per_minute: float = 25.0, poll_interval: float = 0.5):
     """Claims raw chunks and fans out async Groq requests with rate limiting."""
     logger.info("Starting Stage 2 Groq Correction Worker Loop...")
     limiter = AsyncTokenBucket(rate_per_minute=rate_limit_per_minute)
 
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    async with httpx.AsyncClient(timeout=35.0) as client:
         while True:
             try:
-                raw_chunks = db.claim_raw_chunks(batch_size=8)
+                raw_chunks = db.claim_raw_chunks(batch_size=4)
                 if not raw_chunks:
                     await asyncio.sleep(poll_interval)
                     continue
@@ -151,7 +151,7 @@ async def groq_stage_worker(rate_limit_per_minute: float = 30.0, poll_interval: 
                         logger.warning(f"[Stage 2 Groq] Failed chunk {chunk_id[:8]}: {exc}")
                         db.fail_chunk(chunk_id, str(exc))
 
-                # Fan out concurrently
+                # Fan out concurrently within rate limit
                 await asyncio.gather(*[_process_chunk(c) for c in raw_chunks])
 
             except Exception as e:

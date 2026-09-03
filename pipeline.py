@@ -40,7 +40,7 @@ def get_llm_config(api_key: Optional[str] = None, model: Optional[str] = None) -
     if explicit_key.startswith("gsk_") or (not explicit_key and groq_key):
         key = explicit_key or groq_key
         url = "https://api.groq.com/openai/v1/chat/completions"
-        default_model = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
+        default_model = os.environ.get("GROQ_MODEL", "qwen/qwen3.8-27b")
         provider = "Groq"
     elif explicit_key.startswith("sk-or-") or (not explicit_key and openrouter_key):
         key = explicit_key or openrouter_key
@@ -52,7 +52,7 @@ def get_llm_config(api_key: Optional[str] = None, model: Optional[str] = None) -
         # Fallback default
         key = explicit_key or groq_key or openrouter_key
         url = "https://api.groq.com/openai/v1/chat/completions"
-        default_model = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
+        default_model = os.environ.get("GROQ_MODEL", "qwen/qwen3.8-27b")
         provider = "Groq"
 
     chosen_model = model or default_model
@@ -74,15 +74,15 @@ def get_llm_config(api_key: Optional[str] = None, model: Optional[str] = None) -
 
 
 CORRECTION_SYSTEM_PROMPT = (
-    "You are an expert transcript editor and thought-structuring assistant. "
-    "Your objective is to transform raw spoken audio chunks into clean, coherent, and well-structured written text.\n\n"
+    "You are an expert enterprise transcript editor and thought-structuring assistant for business software systems (ERP, Business Central, Portals, Workflows, Financial/Credit systems).\n"
+    "Your objective is to transform raw spoken audio chunks into clean, coherent, and well-structured written technical documentation.\n\n"
     "Rules:\n"
-    "1. Remove verbal fillers (e.g., 'um', 'uh', 'like', 'you know', 'sort of', stuttering, false starts).\n"
-    "2. Correct speech-to-text phonetic mis-transcriptions, grammar, punctuation, and capitalization.\n"
-    "3. Align conversational wandering into concise, logically coherent sentences.\n"
-    "4. Maintain absolute factual fidelity: do NOT hallucinate facts, omit technical terms, or alter speaker intent.\n"
+    "1. Remove all verbal fillers (e.g., 'um', 'uh', 'like', 'you know', 'sort of', 'like so', stuttering, false starts, filler repetitions).\n"
+    "2. Correct speech-to-text phonetic mis-transcriptions and UI misnomers (e.g. 'exer' -> 'Excel', 'battle' -> 'button/option', 'over ERP' -> 'of our ERP', 'ten of years' -> 'tenor of years').\n"
+    "3. Align conversational wandering and fragmented speech into concise, grammatically sound, complete sentences.\n"
+    "4. Maintain absolute factual fidelity: do NOT hallucinate facts, change numerical figures, omit technical codes/abbreviations (PML, DCB, TMRC, ERP, OTP, etc.), or alter speaker intent.\n"
     "5. Use the provided PREVIOUS CONTEXT (if available) to ensure seamless continuity across sentence and thought boundaries.\n"
-    "6. Return ONLY the final polished text with no introduction, explanations, or quotes."
+    "6. Return ONLY the final polished text with no conversational prefixes, explanations, or enclosing quotes."
 )
 
 SUMMARY_SYSTEM_PROMPT = (
@@ -185,11 +185,11 @@ async def async_correct_text(
     prev_context: Optional[str] = None,
     api_key: Optional[str] = None,
     model: Optional[str] = None,
-    max_retries: int = 3
+    max_retries: int = 6
 ) -> str:
     """
     Stage 2: Async LLM correction and thought-structuring pass
-    with context-aware stitching and backoff handling.
+    with context-aware stitching and robust backoff handling.
     """
     cfg = get_llm_config(api_key=api_key, model=model)
     if not cfg["key"]:
@@ -210,7 +210,7 @@ async def async_correct_text(
 
     for attempt in range(max_retries):
         try:
-            resp = await client.post(cfg["url"], json=payload, headers=cfg["headers"], timeout=25.0)
+            resp = await client.post(cfg["url"], json=payload, headers=cfg["headers"], timeout=30.0)
 
             if resp.status_code == 200:
                 data = resp.json()
@@ -218,15 +218,15 @@ async def async_correct_text(
 
             elif resp.status_code == 429:
                 retry_after_str = resp.headers.get("retry-after")
-                sleep_duration = float(retry_after_str) if retry_after_str else (1.5 * (2 ** attempt) + 0.2)
-                logger.warning(f"LLM rate limit hit (429). Backing off for {sleep_duration:.2f}s...")
+                sleep_duration = float(retry_after_str) if retry_after_str else (2.0 * (1.5 ** attempt) + 0.5)
+                logger.warning(f"LLM rate limit hit (429) for '{cfg['model']}'. Backing off for {sleep_duration:.2f}s (attempt {attempt+1}/{max_retries})...")
                 await asyncio.sleep(sleep_duration)
             else:
                 logger.warning(f"LLM API error {resp.status_code}: {resp.text}")
-                await asyncio.sleep(1.0)
+                await asyncio.sleep(1.5)
         except Exception as e:
             logger.warning(f"Exception during LLM request attempt {attempt + 1}: {e}")
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(1.5)
 
     return text
 
@@ -236,7 +236,7 @@ async def async_generate_summary_and_action_items(
     full_transcript: str,
     api_key: Optional[str] = None,
     model: Optional[str] = None,
-    max_retries: int = 3
+    max_retries: int = 6
 ) -> Dict[str, str]:
     """
     Job-Level Synthesis: Generates Executive Summary and Action Items from the full transcript.
@@ -277,10 +277,13 @@ async def async_generate_summary_and_action_items(
                     "action_items": action_part,
                 }
             elif resp.status_code == 429:
-                await asyncio.sleep(2.0 * (attempt + 1))
+                retry_after_str = resp.headers.get("retry-after")
+                sleep_duration = float(retry_after_str) if retry_after_str else (3.0 * (1.5 ** attempt) + 1.0)
+                logger.warning(f"Synthesis rate limit (429). Backing off {sleep_duration:.2f}s...")
+                await asyncio.sleep(sleep_duration)
         except Exception as e:
             logger.warning(f"Failed to generate summary on attempt {attempt + 1}: {e}")
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(2.0)
 
     return {"summary": "", "action_items": ""}
 
