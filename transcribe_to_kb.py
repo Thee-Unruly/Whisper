@@ -382,13 +382,46 @@ def search_documents(query: str, client: Optional[str] = None, module: Optional[
 # 6. Main Runner
 # ==========================================
 
-def process_file(file_path: str, client: str, module: str, model_name: str, chunk_seconds: float, skip_correction: bool):
+def detect_module_from_path(path: str, default_module: str = "02. Finance") -> str:
+    """Automatically detects module name from directory or file path."""
+    clean_path = os.path.abspath(path).replace("\\", "/")
+    parts = clean_path.split("/")
+    
+    known_modules = [
+        ("credit portal", "02. Credit Portal"),
+        ("credit", "01. Credit"),
+        ("finance", "02. Finance"),
+        ("e-recruitment", "03. E-Recruitment"),
+        ("recruitment", "03. E-Recruitment"),
+        ("e-procurement", "05. E-Procurement"),
+        ("procurement", "04. Procurement"),
+        ("treasury", "06. Treasury"),
+        ("grc", "07. GRC"),
+        ("payroll", "09. Payroll"),
+        ("hr", "08. HR"),
+        ("edms", "10. EDMS"),
+        ("power bi", "11. Power BI"),
+        ("powerbi", "11. Power BI"),
+    ]
+    
+    for part in reversed(parts):
+        p_clean = part.lstrip("_").strip().lower()
+        for keyword, mod_name in known_modules:
+            if keyword in p_clean:
+                return mod_name
+    return default_module
+
+
+def process_file(file_path: str, client: str, module: Optional[str], model_name: str, chunk_seconds: float, skip_correction: bool):
     """Processes an individual video/audio file end-to-end."""
     filename = os.path.basename(file_path)
+    # Auto-detect module from folder name if not specified or default
+    resolved_module = module if module else detect_module_from_path(file_path)
+    
     print(f"\n=======================================================")
     print(f" Processing: {filename}")
     print(f" Client:     {client}")
-    print(f" Module:     {module}")
+    print(f" Module:     {resolved_module}")
     print(f"=======================================================")
 
     segments = transcribe(file_path, model_name=model_name)
@@ -403,14 +436,14 @@ def process_file(file_path: str, client: str, module: str, model_name: str, chun
         for c in chunks:
             c["text_raw"] = c["text"]
 
-    save_to_documents_table(chunks, source_filename=filename, client=client, module=module)
+    save_to_documents_table(chunks, source_filename=filename, client=client, module=resolved_module)
 
 
 def main():
     parser = argparse.ArgumentParser(description="Transcribe enterprise media into PostgreSQL (rag_poc.documents).")
-    parser.add_argument("input", nargs="?", help="Path to video/audio file or folder containing media files")
+    parser.add_argument("input", nargs="?", help="Path to video/audio file or parent folder containing module folders")
     parser.add_argument("--client", default="TMRC", help="Client name (e.g., TMRC)")
-    parser.add_argument("--module", default="02. Finance", help="Module name (e.g., 01. Credit, 02. Finance, 04. Procurement)")
+    parser.add_argument("--module", default=None, help="Module name (e.g., 01. Credit, 02. Finance, 04. Procurement). If omitted, automatically detected from folder names.")
     parser.add_argument("-m", "--model", default="base", help="Whisper model size (tiny/base/small/medium/large)")
     parser.add_argument("--chunk-seconds", type=float, default=30.0, help="Target chunk duration in seconds")
     parser.add_argument("--skip-correction", action="store_true", help="Skip LLM grammar correction")
@@ -441,13 +474,17 @@ def main():
             return
         print(f"Found {len(media_files)} media files to process.")
         for idx, mf in enumerate(media_files, 1):
-            print(f"\n--- [{idx}/{len(media_files)}] ---")
-            process_file(mf, client=args.client, module=args.module, model_name=args.model,
+            detected_mod = args.module or detect_module_from_path(mf)
+            print(f"\n--- [{idx}/{len(media_files)}] Auto-detected Module: [{detected_mod}] ---")
+            process_file(mf, client=args.client, module=detected_mod, model_name=args.model,
                          chunk_seconds=args.chunk_seconds, skip_correction=args.skip_correction)
     elif os.path.isfile(args.input):
-        process_file(args.input, client=args.client, module=args.module, model_name=args.model,
+        detected_mod = args.module or detect_module_from_path(args.input)
+        process_file(args.input, client=args.client, module=detected_mod, model_name=args.model,
                      chunk_seconds=args.chunk_seconds, skip_correction=args.skip_correction)
     else:
+        print(f"Error: Input path not found: {args.input}")
+        sys.exit(1)
         print(f"Error: Input path not found: {args.input}")
         sys.exit(1)
 
