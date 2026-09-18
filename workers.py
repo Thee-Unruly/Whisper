@@ -210,6 +210,10 @@ async def synthesis_stage_worker(poll_interval: float = 1.0):
     async with httpx.AsyncClient(timeout=60.0) as client:
         while True:
             try:
+                if not db.table_exists("jobs"):
+                    await asyncio.sleep(poll_interval * 5)
+                    continue
+
                 # Find a completed job that hasn't had synthesis generated yet
                 job_id = None
                 with db.get_db_cursor(commit=False) as cur:

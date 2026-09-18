@@ -1,7 +1,16 @@
 {
   "Servers": {
     "1": {
-      "Name": "Whisper Vector DB (pgvector)",
+      "Name": "Provisioned Remote DB (rag_poc)",
+      "Group": "Servers",
+      "Host": "172.20.0.11",
+      "Port": 4357,
+      "MaintenanceDB": "rag_poc",
+      "Username": "agile_ai_uno",
+      "SSLMode": "prefer"
+    },
+    "2": {
+      "Name": "Local Whisper Vector DB",
       "Group": "Servers",
       "Host": "db",
       "Port": 5432,

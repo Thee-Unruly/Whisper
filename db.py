@@ -177,24 +177,41 @@ def _vector_literal(embedding: List[float]) -> str:
     return "[" + ",".join(str(x) for x in embedding) + "]"
 
 
+def table_exists(table_name: str) -> bool:
+    """Checks if a table exists in the current database."""
+    try:
+        with get_db_cursor(commit=False) as cur:
+            cur.execute("""
+                SELECT 1 FROM information_schema.tables 
+                WHERE table_name = %s AND table_schema = 'public';
+            """, (table_name,))
+            return bool(cur.fetchone())
+    except Exception:
+        return False
+
+
 def init_db():
     """Idempotent database initialization and schema migration."""
-    with get_db_cursor(commit=True) as cur:
-        # 1. Enable pgvector extension
-        cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+    try:
+        with get_db_cursor(commit=True) as cur:
+            # 1. Enable pgvector extension
+            try:
+                cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+            except Exception as ext_e:
+                logger.warning(f"Notice: Extension check ({ext_e})")
 
-        # 2. Create ENUM types safely
-        cur.execute("""
-            DO $$ BEGIN
-                CREATE TYPE job_status AS ENUM (
-                    'queued', 'transcribing', 'transcribed', 
-                    'correcting', 'embedding', 'completed', 
-                    'partial_failure', 'failed', 'cancelled'
-                );
-            EXCEPTION
-                WHEN duplicate_object THEN null;
-            END $$;
-        """)
+            # 2. Create ENUM types safely
+            cur.execute("""
+                DO $$ BEGIN
+                    CREATE TYPE job_status AS ENUM (
+                        'queued', 'transcribing', 'transcribed', 
+                        'correcting', 'embedding', 'completed', 
+                        'partial_failure', 'failed', 'cancelled'
+                    );
+                EXCEPTION
+                    WHEN duplicate_object THEN null;
+                END $$;
+            """)
 
         cur.execute("""
             DO $$ BEGIN
@@ -350,6 +367,8 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_chunks_tsv_gin 
             ON transcript_chunks USING gin (tsv);
         """)
+    except Exception as e:
+        logger.warning(f"Database schema initialization notice: {e}")
 
 
 def purge_and_reinit_db() -> Tuple[bool, str]:
@@ -500,6 +519,8 @@ def claim_next_job() -> Optional[Dict[str, Any]]:
     Atomic claim of the next queued job using FOR UPDATE SKIP LOCKED.
     Commits immediately (~2ms), setting status to 'transcribing'.
     """
+    if not table_exists("jobs"):
+        return None
     with get_db_cursor(commit=True) as cur:
         cur.execute("""
             UPDATE jobs
@@ -595,6 +616,8 @@ def claim_raw_chunks(batch_size: int = 10) -> List[Dict[str, Any]]:
     Claims up to `batch_size` raw chunks for Groq correction using SKIP LOCKED,
     fetching the preceding chunk's text for context-aware stitching.
     """
+    if not table_exists("transcript_chunks"):
+        return []
     with get_db_cursor(commit=True) as cur:
         cur.execute(
             """
@@ -665,6 +688,8 @@ def claim_corrected_chunks(batch_size: int = 32) -> List[Dict[str, Any]]:
     """
     Claims up to `batch_size` corrected chunks for batch MiniLM embedding.
     """
+    if not table_exists("transcript_chunks"):
+        return []
     with get_db_cursor(commit=True) as cur:
         cur.execute(
             """

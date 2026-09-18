@@ -52,8 +52,8 @@ services:
       GROQ_MODEL: ${GROQ_MODEL:-qwen/qwen3.8-27b}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENROUTER_MODEL: ${OPENROUTER_MODEL:-}
-      PGHOST: db
-      PGPORT: 5432
+      PGHOST: ${PGHOST:-db}
+      PGPORT: ${PGPORT:-5432}
       PGDATABASE: ${PGDATABASE:-transcripts_agile}
       PGUSER: ${PGUSER:-postgres}
       PGPASSWORD: ${PGPASSWORD:-postgres}
