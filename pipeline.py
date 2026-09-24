@@ -312,15 +312,21 @@ def embed_texts(texts: List[str]) -> List[List[float]]:
     return [emb.tolist() for emb in embeddings]
 
 
-def search_kb(query: str, top_k: int = 5, submodule: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Performs RRF Hybrid Search (pgvector dense cosine + Full-Text Search), optionally filtered by submodule."""
+def search_kb(
+    query: str, 
+    top_k: int = 5, 
+    submodule: Optional[str] = None, 
+    client: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """Performs RRF Hybrid Search (pgvector dense cosine + Full-Text Search), optionally filtered by submodule and client."""
     model = get_embedding_model()
     query_embedding = list(model.embed([query]))[0].tolist()
     return db.search_chunks(
         query_embedding=query_embedding,
         query_text=query,
         top_k=top_k,
-        submodule_code=submodule
+        submodule_code=submodule,
+        client=client
     )
 
 
@@ -339,16 +345,22 @@ async def ask_kb(
     query: str,
     top_k: int = 5,
     submodule: Optional[str] = None,
+    client: Optional[str] = None,
     api_key: Optional[str] = None,
     model: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Retrieves top matching chunks (optionally scoped to a submodule) and prompts the configured LLM to synthesize a grounded answer."""
+    """Retrieves top matching chunks (optionally scoped to a submodule and client) and prompts the configured LLM to synthesize a grounded answer."""
     import httpx
     # Retrieve wider context window (at least 8 chunks) to capture complete procedures across files
     search_k = max(int(top_k or 5), 8)
-    results = search_kb(query=query, top_k=search_k, submodule=submodule)
+    results = search_kb(query=query, top_k=search_k, submodule=submodule, client=client)
     if not results:
-        sub_msg = f" in submodule '{submodule}'" if submodule and submodule.lower() not in ("all", "*") else ""
+        scope_parts = []
+        if client and client.strip():
+            scope_parts.append(f"client '{client}'")
+        if submodule and submodule.lower() not in ("all", "*"):
+            scope_parts.append(f"submodule '{submodule}'")
+        sub_msg = f" for {' and '.join(scope_parts)}" if scope_parts else ""
         return {
             "answer": f"No relevant transcripts found{sub_msg} in the knowledge base.",
             "sources": [],

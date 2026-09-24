@@ -1326,10 +1326,12 @@ def search_chunks(
     query_embedding: List[float], 
     query_text: Optional[str] = None,
     top_k: int = 5, 
-    submodule_code: Optional[str] = None
+    submodule_code: Optional[str] = None,
+    client: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
     Performs vector search across transcript_chunks (if exists) or public.documents (pgvector 1536).
+    Supports client and submodule scoping for multi-tenant n8n workflows.
     """
     has_transcript_table = table_exists("transcript_chunks")
     has_documents_table = table_exists("documents")
@@ -1394,6 +1396,10 @@ def search_chunks(
 
         where_clauses = []
         params = [vec_literal]
+
+        if client and client.strip():
+            where_clauses.append("source LIKE %s")
+            params.append(f"%client:{client.strip()}%")
 
         if submodule_code and submodule_code.lower() not in ("all", "*", ""):
             sub_info = get_submodule_info(submodule_code)

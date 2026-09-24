@@ -253,6 +253,7 @@ class SearchRequest(BaseModel):
     query: str
     top_k: int = 5
     submodule: Optional[str] = "all"
+    client: Optional[str] = None
 
 
 class AskRequest(BaseModel):
@@ -260,17 +261,23 @@ class AskRequest(BaseModel):
     question: Optional[str] = None
     top_k: int = 5
     submodule: Optional[str] = "all"
+    client: Optional[str] = None
 
 
 @app.post("/search")
 @app.post("/api/search")
 def search(req: SearchRequest):
-    """Semantic vector search using cosine distance (<=>), optionally scoped to a submodule."""
+    """Semantic vector search using cosine distance (<=>), optionally scoped to a submodule and client."""
     if not req.query.strip():
         return {"results": []}
     try:
-        results = pipeline.search_kb(query=req.query, top_k=req.top_k, submodule=req.submodule)
-        return {"results": results, "submodule": req.submodule}
+        results = pipeline.search_kb(
+            query=req.query, 
+            top_k=req.top_k, 
+            submodule=req.submodule, 
+            client=req.client
+        )
+        return {"results": results, "submodule": req.submodule, "client": req.client}
     except Exception as e:
         logger.error(f"Search query failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -279,12 +286,17 @@ def search(req: SearchRequest):
 @app.post("/ask")
 @app.post("/api/ask")
 async def ask(req: AskRequest):
-    """Answers user question using retrieved transcript chunks and Groq LLM synthesis, optionally scoped to a submodule."""
+    """Answers user question using retrieved transcript chunks and Groq LLM synthesis, optionally scoped to a submodule and client."""
     q = (req.question or req.query or "").strip()
     if not q:
         return {"answer": "Please provide a valid question.", "sources": []}
     try:
-        response = await pipeline.ask_kb(query=q, top_k=req.top_k, submodule=req.submodule)
+        response = await pipeline.ask_kb(
+            query=q, 
+            top_k=req.top_k, 
+            submodule=req.submodule, 
+            client=req.client
+        )
         return response
     except Exception as e:
         logger.error(f"Q&A failed: {e}", exc_info=True)
