@@ -374,7 +374,11 @@ def run_evaluation(req: EvalRequest):
         "top_k": req.top_k
     }
 
-    return {"summary": summary, "details": query_results}
+    return {
+        "summary": summary,
+        "details": query_results,
+        "explanation": evaluate_retrieval.explain_metrics(summary, query_results),
+    }
 
 
 

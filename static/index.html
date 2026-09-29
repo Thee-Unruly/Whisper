@@ -2582,6 +2582,9 @@
                             <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">1 / First Hit Rank</div>
                         </div>
                     </div>
+
+                    <!-- Metric Explanations Container -->
+                    <div id="evalExplanation" style="margin: 16px 0;"></div>
                 </div>
 
                 <!-- Retrieved Chunks Feed -->
@@ -2660,6 +2663,11 @@
                 document.getElementById("evalSummaryContainer").style.display = "block";
                 document.getElementById("evalDetailsHeader").style.display = "block";
 
+                // Render dynamic plain-language metric explanations
+                if (data.explanation) {
+                    renderExplanation(data.explanation);
+                }
+
                 // Render retrieved chunks with highlight
                 const detailsContainer = document.getElementById("evalDetailsContainer");
                 detailsContainer.innerHTML = "";
@@ -2711,6 +2719,43 @@
                 btn.disabled = false;
                 btn.innerHTML = "<span>🚀 EVALUATE RETRIEVAL ACCURACY</span>";
             }
+        }
+
+        function renderExplanation(exp) {
+            const container = document.getElementById("evalExplanation");
+            if (!container || !exp) return;
+            const rows = [
+                ["Precision@K", exp.precision, "var(--cyan)", "rgba(0, 242, 254, 0.12)"],
+                ["Recall@K", exp.recall, "var(--emerald)", "rgba(16, 185, 129, 0.12)"],
+                ["F1-Score@K", exp.f1_score, "#D8B4FE", "rgba(121, 40, 202, 0.15)"],
+                ["Hit Rate@K", exp.hit_rate, "var(--amber)", "rgba(245, 158, 11, 0.12)"],
+                ["MRR", exp.mrr, "#FDA4AF", "rgba(244, 63, 94, 0.12)"],
+            ];
+            container.innerHTML = `
+                <div style="background: rgba(14, 20, 32, 0.85); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 16px 18px; box-shadow: 0 4px 18px rgba(0,0,0,0.3);">
+                    <div style="font-weight: 700; font-size: 12px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                        <span>💡</span> WHAT THESE SCORES MEAN
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        ${rows.map(([t, d, color, bg]) => `
+                            <div style="display: flex; align-items: baseline; gap: 10px; font-size: 12.5px; line-height: 1.5;">
+                                <span style="font-size: 11px; font-weight: 700; color: ${color}; background: ${bg}; border: 1px solid ${color}33; border-radius: 4px; padding: 2px 7px; font-family: 'JetBrains Mono', monospace; flex-shrink: 0;">
+                                    ${escapeHtml(t)}
+                                </span>
+                                <span style="color: var(--text-primary);">${escapeHtml(d)}</span>
+                            </div>
+                        `).join("")}
+                    </div>
+                    <div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.07); display: flex; flex-direction: column; gap: 8px;">
+                        <div style="font-size: 13px; color: #FFF; background: rgba(121, 40, 202, 0.15); border-left: 3px solid #7928CA; padding: 8px 12px; border-radius: 0 var(--radius-sm) var(--radius-sm) 0;">
+                            <strong style="color: #D8B4FE;">Overall:</strong> ${escapeHtml(exp.overall)}
+                        </div>
+                        <div style="font-size: 11.5px; color: var(--text-muted); padding-left: 4px;">
+                            <strong style="color: var(--text-secondary);">Note:</strong> ${escapeHtml(exp.caveat)}
+                        </div>
+                    </div>
+                </div>
+            `;
         }
     </script>
 </body>

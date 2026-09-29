@@ -145,6 +145,89 @@ def calculate_metrics_flexible(relevant_items: List[Any], retrieved_docs: List[D
     }
 
 
+def _band(value: float) -> str:
+    if value >= 0.8: return "strong"
+    if value >= 0.5: return "moderate"
+    if value >= 0.25: return "weak"
+    return "very weak"
+
+
+def explain_metrics(summary: Dict[str, Any], details: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Turns the numeric scores into plain-language explanations."""
+    k = summary["top_k"]
+    n = summary["total_queries"]
+    p = summary["mean_precision"]
+    r = summary["mean_recall"]
+    f1 = summary["mean_f1_score"]
+    hit = summary["mean_hit_rate"]
+    mrr = summary["mrr"]
+    single = n == 1 and details
+
+    # Precision
+    if single:
+        hits = round(p * k)
+        precision = (f"Out of the {k} chunks returned, {hits} {'was' if hits == 1 else 'were'} relevant "
+                     f"({hits} ÷ {k}). The other {k - hits} were off-target noise.")
+    else:
+        precision = (f"On average, {p * k:.1f} of every {k} returned chunks were relevant. "
+                     f"Low precision means results are padded with unrelated content.")
+
+    # Recall
+    if single:
+        expected = len(details[0].get("expected", []))
+        found = round(r * expected) if expected else 0
+        recall = (f"You expected {expected} item(s) to be found and the search found {found} "
+                  f"({found} ÷ {expected}). Low recall means relevant material was missed.")
+    else:
+        recall = (f"On average, the search found {r * 100:.0f}% of the items you expected. "
+                  f"Low recall means relevant material is being missed.")
+
+    # F1
+    f1_text = (f"The balance between precision and recall. At {f1 * 100:.1f}%, overall retrieval "
+               f"quality is {_band(f1)}.")
+
+    # Hit rate
+    if single:
+        hit_text = ("At least one relevant chunk appeared in the top results, so the system found the right topic."
+                    if hit >= 1 else
+                    "No relevant chunk appeared in the top results, so the system missed the topic entirely.")
+    else:
+        hit_text = f"{hit * 100:.0f}% of prompts returned at least one relevant chunk in the top {k}."
+
+    # MRR
+    if single and mrr > 0:
+        rank = round(1 / mrr)
+        mrr_text = (f"The first relevant result appeared at Rank #{rank}. "
+                    f"{'This is the best possible score.' if rank == 1 else 'The closer to 1.0, the better.'}")
+    elif mrr == 0:
+        mrr_text = "No relevant result was found in the top results."
+    else:
+        mrr_text = (f"On average the first relevant chunk appears around rank {1 / mrr:.1f}. "
+                    f"1.0 means the right answer is always first.")
+
+    # Overall verdict
+    if hit >= 0.8 and p < 0.5:
+        overall = ("The search usually finds the right answer and ranks it well, but it pads the results "
+                   "with unrelated chunks and misses other relevant ones.")
+    elif hit < 0.5:
+        overall = "The search is frequently missing the topic entirely. Check chunking, embeddings, or the filters used."
+    elif p >= 0.5 and r >= 0.5:
+        overall = "Retrieval is performing well: results are mostly relevant and most expected content is found."
+    else:
+        overall = "Retrieval is partially working, with room to improve precision and recall."
+
+    caveat = ("Scores depend on how 'relevant' is defined. A chunk counts as a hit only if it contains your "
+              "expected keyword/filename/ID, so topically relevant chunks without that exact term are marked off-target.")
+    if n < 10:
+        caveat += f" Only {n} prompt(s) were tested; 10-20 gives a more reliable picture."
+
+    return {
+        "precision": precision, "recall": recall, "f1_score": f1_text,
+        "hit_rate": hit_text, "mrr": mrr_text, "overall": overall, "caveat": caveat,
+    }
+
+
+
 
 def create_sample_ground_truth(file_path: str):
     """Generates a template ground truth JSON file for evaluation."""
@@ -205,7 +288,7 @@ def evaluate_pipeline(ground_truth_path: str, top_k: int = 5) -> Dict[str, Any]:
         retrieved = retrieve_top_k(query, top_k=top_k, client=client, module=module)
         retrieved_ids = [doc["id"] for doc in retrieved]
 
-        metrics = calculate_metrics(relevant_ids, retrieved_ids, top_k)
+        metrics = calculate_metrics_flexible(relevant_ids, retrieved, top_k)
 
         sum_precision += metrics["precision"]
         sum_recall += metrics["recall"]
