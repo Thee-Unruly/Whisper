@@ -317,28 +317,6 @@
                 contentHtml += `</div>`;
             }
 
-            // If sources retrieved
-            if (sources && sources.length > 0) {
-                const sId = "sources_" + Math.random().toString(36).substr(2, 9);
-                contentHtml += `
-                    <div class="sources-box">
-                        <span class="sources-toggle" onclick="toggleSources('${sId}')">📁 Referenced Recordings (${sources.length}) ▼</span>
-                        <div id="${sId}" style="display:none; margin-top:6px;">
-                `;
-                sources.forEach((s, idx) => {
-                    const startM = Math.floor(s.start_time / 60);
-                    const startS = Math.floor(s.start_time % 60);
-                    contentHtml += `
-                        <div class="source-card">
-                            <strong>#${idx+1} [${escapeHtml(s.submodule_name || s.submodule_code || 'General')}]</strong> 
-                            ${escapeHtml(s.source_file)} (${startM}:${startS < 10 ? '0' : ''}${startS})<br>
-                            <em>"${escapeHtml(s.text.substring(0, 100))}..."</em>
-                        </div>
-                    `;
-                });
-                contentHtml += `</div></div>`;
-            }
-
             const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             contentHtml += `<div class="msg-meta">${role === 'user' ? 'You' : 'Agent'} • ${timeStr}</div>`;
 
