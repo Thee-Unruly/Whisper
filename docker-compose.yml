@@ -58,6 +58,7 @@ services:
       PGUSER: ${PGUSER:-postgres}
       PGPASSWORD: ${PGPASSWORD:-postgres}
     volumes:
+      - .:/app
       - ./uploads:/app/uploads
       - model_cache:/root/.cache
     ports:

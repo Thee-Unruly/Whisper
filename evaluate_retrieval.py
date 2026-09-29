@@ -67,41 +67,72 @@ def retrieve_top_k(query: str, top_k: int = 5, client: str = None, module: str =
     return retrieved
 
 
-def calculate_metrics(relevant_ids: List[int], retrieved_ids: List[int], k: int) -> Dict[str, float]:
+def is_match(doc: Dict[str, Any], relevant_spec: Any) -> bool:
+    """Checks if a retrieved document chunk matches a ground truth specification (ID, filename, text snippet, or keyword)."""
+    if isinstance(relevant_spec, int):
+        return doc["id"] == relevant_spec
+    
+    spec_str = str(relevant_spec).strip().lower()
+    if not spec_str:
+        return False
+        
+    # Check ID string
+    if str(doc.get("id")) == spec_str:
+        return True
+        
+    # Check in source metadata (filename, client, module)
+    source_str = str(doc.get("source", "")).lower()
+    if spec_str in source_str:
+        return True
+        
+    # Check in chunk text
+    chunk_text = str(doc.get("text", "")).lower()
+    if spec_str in chunk_text:
+        return True
+
+    return False
+
+
+def calculate_metrics_flexible(relevant_items: List[Any], retrieved_docs: List[Dict[str, Any]], k: int) -> Dict[str, float]:
     """
-    Computes IR metrics for a single query:
+    Computes IR metrics for a single query supporting doc IDs, filenames, or keywords:
     - Precision@k
     - Recall@k
     - F1-Score@k
     - Hit Rate@k
     - MRR (Mean Reciprocal Rank)
     """
-    retrieved_k = retrieved_ids[:k]
-    relevant_set = set(relevant_ids)
-    retrieved_set = set(retrieved_k)
+    retrieved_k = retrieved_docs[:k]
+    if not relevant_items:
+        return {
+            "precision": 0.0, "recall": 0.0, "f1_score": 0.0, "hit_rate": 0.0, "mrr": 0.0
+        }
 
-    # True Positives
-    tp = len(relevant_set.intersection(retrieved_set))
+    # Identify retrieved docs that match at least one expected item
+    matched_retrieved_indices = set()
+    matched_relevant_specs = set()
 
-    # Precision@k = TP / K
+    for r_idx, doc in enumerate(retrieved_k):
+        for spec_idx, spec in enumerate(relevant_items):
+            if is_match(doc, spec):
+                matched_retrieved_indices.add(r_idx)
+                matched_relevant_specs.add(spec_idx)
+
+    tp = len(matched_retrieved_indices)
     precision = tp / k if k > 0 else 0.0
+    recall = len(matched_relevant_specs) / len(relevant_items) if len(relevant_items) > 0 else 0.0
 
-    # Recall@k = TP / Total Relevant
-    recall = tp / len(relevant_set) if len(relevant_set) > 0 else 0.0
-
-    # F1-Score@k = 2 * (P * R) / (P + R)
     if precision + recall > 0:
         f1_score = 2 * (precision * recall) / (precision + recall)
     else:
         f1_score = 0.0
 
-    # Hit Rate@k = 1 if at least one relevant document in top-k, else 0
     hit_rate = 1.0 if tp > 0 else 0.0
 
     # Reciprocal Rank (RR)
     reciprocal_rank = 0.0
-    for rank, doc_id in enumerate(retrieved_k, 1):
-        if doc_id in relevant_set:
+    for rank, doc in enumerate(retrieved_k, 1):
+        if any(is_match(doc, spec) for spec in relevant_items):
             reciprocal_rank = 1.0 / rank
             break
 
@@ -112,6 +143,7 @@ def calculate_metrics(relevant_ids: List[int], retrieved_ids: List[int], k: int)
         "hit_rate": hit_rate,
         "mrr": reciprocal_rank
     }
+
 
 
 def create_sample_ground_truth(file_path: str):

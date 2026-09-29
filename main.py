@@ -322,7 +322,7 @@ class EvalRequest(BaseModel):
 def run_evaluation(req: EvalRequest):
     """
     Runs IR retrieval metrics evaluation (Precision, Recall, F1, Hit Rate, MRR)
-    over a set of ground truth test cases.
+    over a set of ground truth test cases supporting doc IDs, filenames, or expected keywords.
     """
     import evaluate_retrieval
     if not req.test_cases:
@@ -339,14 +339,17 @@ def run_evaluation(req: EvalRequest):
 
     for item in req.test_cases:
         query = item.get("query", "")
-        relevant_ids = item.get("relevant_doc_ids", [])
+        # Accepts 'expected', 'expected_keywords', 'expected_files', or 'relevant_doc_ids'
+        relevant_specs = item.get("expected") or item.get("expected_keywords") or item.get("expected_files") or item.get("relevant_doc_ids") or []
+        if isinstance(relevant_specs, (str, int)):
+            relevant_specs = [relevant_specs]
+
         client = item.get("client")
         module = item.get("module")
 
         retrieved = evaluate_retrieval.retrieve_top_k(query, top_k=req.top_k, client=client, module=module)
-        retrieved_ids = [doc["id"] for doc in retrieved]
 
-        metrics = evaluate_retrieval.calculate_metrics(relevant_ids, retrieved_ids, req.top_k)
+        metrics = evaluate_retrieval.calculate_metrics_flexible(relevant_specs, retrieved, req.top_k)
 
         sum_precision += metrics["precision"]
         sum_recall += metrics["recall"]
@@ -356,7 +359,7 @@ def run_evaluation(req: EvalRequest):
 
         query_results.append({
             "query": query,
-            "relevant_ids": relevant_ids,
+            "expected": relevant_specs,
             "retrieved": retrieved,
             "metrics": metrics
         })
@@ -372,6 +375,39 @@ def run_evaluation(req: EvalRequest):
     }
 
     return {"summary": summary, "details": query_results}
+
+
+
+# ==========================================
+# Agentic Conversational AI Endpoints
+# ==========================================
+
+class AgentChatRequest(BaseModel):
+    messages: List[Dict[str, str]]
+    submodule: Optional[str] = None
+
+
+@app.post("/api/agent/chat")
+async def agent_chat(req: AgentChatRequest):
+    """
+    Conversational Agent turn:
+    - Asks follow-up clarification if user question doesn't specify module
+    - Performs scoped Vector RAG retrieval on PostgreSQL
+    - Synthesizes natural answer citing exact timestamps and files
+    """
+    import agent
+    try:
+        response = await agent.process_agent_turn(messages=req.messages, forced_submodule=req.submodule)
+        return response
+    except Exception as e:
+        logger.error(f"Agent chat failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/agent")
+def read_agent_ui():
+    """Serves the dedicated white & black Comic Sans Conversational Agent UI."""
+    return FileResponse("static/agent.html")
 
 
 # Serve static frontend

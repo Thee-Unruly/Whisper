@@ -1333,6 +1333,9 @@
                 <span class="engine-tag">Groq LPU (openai/gpt-oss-120b)</span>
                 <span class="engine-tag">all-MiniLM-L6-v2 (384d)</span>
             </div>
+            <a href="/agent" class="db-config-btn" style="text-decoration:none; background: #FFFFFF; color: #000000; font-family:'Comic Sans MS', cursive; font-weight:700; border: 2px solid #000;" title="Open Comic Sans Conversational Agent">
+                <span>🤖 Comic Sans Agent</span>
+            </a>
             <button class="db-config-btn" id="evalModalBtn" onclick="openEvalModal()"
                 style="background: rgba(121, 40, 202, 0.15); border-color: rgba(121, 40, 202, 0.4); color: #D8B4FE;"
                 title="Run IR Metrics Evaluation (F1, Precision, Recall, Hit Rate, MRR)">
@@ -2492,100 +2495,101 @@
 
     <!-- IR Evaluation Studio Modal -->
     <div class="db-modal-overlay" id="evalModalOverlay" onclick="if(event.target===this) closeEvalModal()" style="display:none;">
-        <div class="db-modal-card" style="width: 1100px; max-width: 95vw; height: 88vh; max-height: 900px; display: flex; flex-direction: column; padding: 28px; gap: 18px; border-color: rgba(121, 40, 202, 0.4); box-shadow: 0 25px 70px rgba(0, 0, 0, 0.9), 0 0 45px rgba(121, 40, 202, 0.25);">
+        <div class="db-modal-card" style="width: 1250px; max-width: 96vw; height: 90vh; max-height: 940px; display: flex; flex-direction: column; padding: 32px 36px; gap: 20px; border-color: rgba(121, 40, 202, 0.45); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.95), 0 0 55px rgba(121, 40, 202, 0.3);">
             <!-- Modal Header -->
-            <div class="db-modal-header" style="padding-bottom: 14px; flex-shrink: 0;">
-                <div style="display: flex; align-items: center; gap: 14px;">
-                    <div style="width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(135deg, #7928CA 0%, #FF0080 100%); display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 0 20px rgba(255, 0, 128, 0.35);">
+            <div class="db-modal-header" style="padding-bottom: 16px; flex-shrink: 0;">
+                <div style="display: flex; align-items: center; gap: 16px;">
+                    <div style="width: 48px; height: 48px; border-radius: 12px; background: linear-gradient(135deg, #7928CA 0%, #FF0080 100%); display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 0 20px rgba(255, 0, 128, 0.4);">
                         📊
                     </div>
                     <div>
-                        <div class="db-modal-title" style="font-size: 19px; font-weight: 700; letter-spacing: -0.01em;">
-                            Retrieval Metrics & Evaluation Studio
+                        <div class="db-modal-title" style="font-size: 21px; font-weight: 700; letter-spacing: -0.01em;">
+                            Retrieval Evaluation Studio
                         </div>
-                        <div class="db-modal-desc" style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
-                            Benchmarking Vector Retrieval Accuracy across Chunks (Precision, Recall, F1-Score, Hit Rate, MRR)
+                        <div class="db-modal-desc" style="font-size: 12.5px; color: var(--text-secondary); margin-top: 2px;">
+                            Test any prompt and instantly compute Precision, Recall, F1-Score, and MRR against retrieved knowledge chunks
                         </div>
                     </div>
                 </div>
-                <button class="db-close-btn" onclick="closeEvalModal()" title="Close" style="font-size: 26px; padding: 4px 10px;">&times;</button>
+                <button class="db-close-btn" onclick="closeEvalModal()" title="Close" style="font-size: 28px; padding: 4px 12px;">&times;</button>
             </div>
 
             <!-- Modal Content (Scrollable) -->
-            <div style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding-right: 6px;">
+            <div style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; padding-right: 8px;">
                 
-                <!-- Controls Row -->
-                <div style="display: grid; grid-template-columns: 1fr 1fr 120px; gap: 14px; flex-shrink: 0;">
+                <!-- Main Evaluation Prompt Input Space -->
+                <div class="control-group">
+                    <label style="font-size: 12px; color: var(--cyan); font-weight: 700; letter-spacing: 0.05em;">💬 Test Prompt / Question</label>
+                    <input type="text" id="evalSinglePrompt" placeholder="e.g. How to set up and configure accounting periods?" style="padding: 16px 20px; font-size: 15px; font-weight: 600; background: rgba(8, 12, 20, 0.95); border: 1px solid var(--border-subtle); color: #FFF; border-radius: var(--radius-sm); box-shadow: 0 2px 10px rgba(0,0,0,0.4);" onkeydown="if(event.key==='Enter') runSingleEvaluation()">
+                </div>
+
+                <!-- Expected Keywords / Concepts (Comma separated) -->
+                <div class="control-group">
+                    <label style="font-size: 12px; color: var(--emerald); font-weight: 700; letter-spacing: 0.05em;">🎯 Expected Keywords / Topics in Relevant Chunks (comma separated)</label>
+                    <input type="text" id="evalExpectedKeywords" placeholder="e.g. accounting period, finance, fiscal, calendar" style="padding: 14px 20px; font-size: 14px; background: rgba(8, 12, 20, 0.95); border: 1px solid var(--border-subtle); color: #E2E8F0; border-radius: var(--radius-sm);" onkeydown="if(event.key==='Enter') runSingleEvaluation()">
+                </div>
+
+                <!-- Optional Filter Parameters -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr 140px; gap: 14px;">
                     <div class="control-group">
-                        <label style="font-size: 11px; letter-spacing: 0.05em;">🏢 Target Client Scope</label>
-                        <input type="text" id="evalClientInput" placeholder="e.g. TMRC (Leave empty for Global)" style="padding: 11px 14px; font-size: 13px;">
+                        <label style="font-size: 11px;">🏢 Client Filter (Optional)</label>
+                        <input type="text" id="evalClientInput" placeholder="e.g. TMRC" style="padding: 11px 16px; font-size: 13px;">
                     </div>
                     <div class="control-group">
-                        <label style="font-size: 11px; letter-spacing: 0.05em;">📁 Submodule / Domain</label>
-                        <input type="text" id="evalModuleInput" placeholder="e.g. 02. Finance (Leave empty for Global)" style="padding: 11px 14px; font-size: 13px;">
+                        <label style="font-size: 11px;">📁 Submodule Filter (Optional)</label>
+                        <input type="text" id="evalModuleInput" placeholder="e.g. 02. Finance" style="padding: 11px 16px; font-size: 13px;">
                     </div>
                     <div class="control-group">
-                        <label style="font-size: 11px; letter-spacing: 0.05em;">Top K Depth</label>
-                        <input type="number" id="evalTopKInput" value="5" min="1" max="25" style="padding: 11px 14px; font-size: 14px; font-weight: 700; text-align: center; color: var(--cyan);">
+                        <label style="font-size: 11px;">Top K Depth</label>
+                        <input type="number" id="evalTopKInput" value="5" min="1" max="25" style="padding: 11px 16px; font-size: 14px; text-align: center; font-weight: 700; color: var(--cyan);">
                     </div>
                 </div>
 
-                <!-- Ground Truth Dataset Editor -->
-                <div class="control-group" style="flex-shrink: 0;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <label style="font-size: 11px; letter-spacing: 0.05em;">Ground Truth Evaluation Queries & Target Doc IDs (JSON)</label>
-                        <button type="button" class="btn-secondary" style="padding: 4px 12px; font-size: 11.5px; border-color: rgba(121, 40, 202, 0.4); color: #D8B4FE;" onclick="loadSampleEvalJson()">
-                            🔄 Reset Sample Queries
-                        </button>
-                    </div>
-                    <textarea id="evalJsonInput" rows="7" style="width: 100%; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.5; background: rgba(8, 12, 20, 0.95); border: 1px solid var(--border-subtle); color: #E2E8F0; padding: 14px; border-radius: var(--radius-sm); outline: none; resize: vertical; box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.5);"></textarea>
-                </div>
-
-                <!-- Run Evaluation CTA Button -->
-                <button class="btn-primary btn-search" id="runEvalBtn" onclick="runEvaluationStudio()" style="padding: 13px 24px; font-size: 14px; letter-spacing: 0.03em; border-radius: var(--radius-sm); width: 100%; flex-shrink: 0; box-shadow: 0 4px 20px rgba(121, 40, 202, 0.4);">
-                    <span>🚀 EXECUTE EVALUATION BENCHMARK</span>
+                <!-- Run CTA Button -->
+                <button class="btn-primary btn-search" id="runEvalBtn" onclick="runSingleEvaluation()" style="padding: 15px 28px; font-size: 15px; font-weight: 700; border-radius: var(--radius-sm); width: 100%; box-shadow: 0 4px 22px rgba(121, 40, 202, 0.45); letter-spacing: 0.03em;">
+                    <span>🚀 EVALUATE RETRIEVAL ACCURACY</span>
                 </button>
 
-                <!-- Metrics KPI Cards -->
-                <div id="evalSummaryContainer" style="display: none; flex-shrink: 0;">
-                    <div style="font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px;">
-                        📈 Benchmark Summary Results
+                <!-- Metrics Scorecards -->
+                <div id="evalSummaryContainer" style="display: none;">
+                    <div style="font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px;">
+                        📈 Instant Retrieval Performance
                     </div>
-                    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;">
-                        <div style="background: rgba(0, 242, 254, 0.08); border: 1px solid rgba(0, 242, 254, 0.3); border-radius: var(--radius-md); padding: 14px 10px; text-align: center;">
-                            <div style="font-size: 11px; font-weight: 700; color: var(--cyan); text-transform: uppercase; letter-spacing: 0.05em;">Precision@K</div>
-                            <div id="metricPrecision" style="font-size: 26px; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: var(--cyan); margin-top: 4px;">0.0%</div>
+                    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px;">
+                        <div style="background: rgba(0, 242, 254, 0.08); border: 1px solid rgba(0, 242, 254, 0.3); border-radius: var(--radius-md); padding: 16px 12px; text-align: center;">
+                            <div style="font-size: 11px; font-weight: 700; color: var(--cyan); text-transform: uppercase;">Precision@K</div>
+                            <div id="metricPrecision" style="font-size: 28px; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: var(--cyan); margin-top: 4px;">0.0%</div>
                             <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">Relevant in Top K</div>
                         </div>
-                        <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: var(--radius-md); padding: 14px 10px; text-align: center;">
-                            <div style="font-size: 11px; font-weight: 700; color: var(--emerald); text-transform: uppercase; letter-spacing: 0.05em;">Recall@K</div>
-                            <div id="metricRecall" style="font-size: 26px; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: var(--emerald); margin-top: 4px;">0.0%</div>
+                        <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: var(--radius-md); padding: 16px 12px; text-align: center;">
+                            <div style="font-size: 11px; font-weight: 700; color: var(--emerald); text-transform: uppercase;">Recall@K</div>
+                            <div id="metricRecall" style="font-size: 28px; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: var(--emerald); margin-top: 4px;">0.0%</div>
                             <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">Captured Gold Docs</div>
                         </div>
-                        <div style="background: rgba(121, 40, 202, 0.12); border: 1px solid rgba(121, 40, 202, 0.4); border-radius: var(--radius-md); padding: 14px 10px; text-align: center;">
-                            <div style="font-size: 11px; font-weight: 700; color: #D8B4FE; text-transform: uppercase; letter-spacing: 0.05em;">F1-Score@K</div>
-                            <div id="metricF1" style="font-size: 26px; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: #D8B4FE; margin-top: 4px;">0.0%</div>
+                        <div style="background: rgba(121, 40, 202, 0.12); border: 1px solid rgba(121, 40, 202, 0.4); border-radius: var(--radius-md); padding: 16px 12px; text-align: center;">
+                            <div style="font-size: 11px; font-weight: 700; color: #D8B4FE; text-transform: uppercase;">F1-Score@K</div>
+                            <div id="metricF1" style="font-size: 28px; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: #D8B4FE; margin-top: 4px;">0.0%</div>
                             <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">Harmonic Mean</div>
                         </div>
-                        <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: var(--radius-md); padding: 14px 10px; text-align: center;">
-                            <div style="font-size: 11px; font-weight: 700; color: var(--amber); text-transform: uppercase; letter-spacing: 0.05em;">Hit Rate@K</div>
-                            <div id="metricHitRate" style="font-size: 26px; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: var(--amber); margin-top: 4px;">0.0%</div>
+                        <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: var(--radius-md); padding: 16px 12px; text-align: center;">
+                            <div style="font-size: 11px; font-weight: 700; color: var(--amber); text-transform: uppercase;">Hit Rate@K</div>
+                            <div id="metricHitRate" style="font-size: 28px; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: var(--amber); margin-top: 4px;">0.0%</div>
                             <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">At least 1 Hit in K</div>
                         </div>
-                        <div style="background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.3); border-radius: var(--radius-md); padding: 14px 10px; text-align: center;">
-                            <div style="font-size: 11px; font-weight: 700; color: #FDA4AF; text-transform: uppercase; letter-spacing: 0.05em;">MRR</div>
-                            <div id="metricMRR" style="font-size: 26px; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: #FDA4AF; margin-top: 4px;">0.000</div>
+                        <div style="background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.3); border-radius: var(--radius-md); padding: 16px 12px; text-align: center;">
+                            <div style="font-size: 11px; font-weight: 700; color: #FDA4AF; text-transform: uppercase;">MRR</div>
+                            <div id="metricMRR" style="font-size: 28px; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: #FDA4AF; margin-top: 4px;">0.000</div>
                             <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">1 / First Hit Rank</div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Per-Query Match Details Container -->
-                <div style="display: flex; flex-direction: column; gap: 8px;">
-                    <div id="evalDetailsHeader" style="display:none; font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em;">
-                        📋 Per-Query Match Breakdown
+                <!-- Retrieved Chunks Feed -->
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <div id="evalDetailsHeader" style="display:none; font-size: 11.5px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px;">
+                        📄 Retrieved Knowledge Chunks & Keyword Match Analysis
                     </div>
-                    <div id="evalDetailsContainer" style="display: flex; flex-direction: column; gap: 10px;"></div>
+                    <div id="evalDetailsContainer" style="display: flex; flex-direction: column; gap: 8px;"></div>
                 </div>
 
             </div>
@@ -2595,55 +2599,48 @@
     <script>
         function openEvalModal() {
             document.getElementById("evalModalOverlay").style.display = "flex";
-            if (!document.getElementById("evalJsonInput").value.trim()) {
-                loadSampleEvalJson();
+            const promptInput = document.getElementById("evalSinglePrompt");
+            if (!promptInput.value.trim()) {
+                promptInput.value = "How to set up and configure accounting periods?";
+                document.getElementById("evalExpectedKeywords").value = "accounting period, finance, fiscal, calendar";
             }
+            setTimeout(() => promptInput.focus(), 100);
         }
 
         function closeEvalModal() {
             document.getElementById("evalModalOverlay").style.display = "none";
         }
 
-        function loadSampleEvalJson() {
-            const sample = [
-                {
-                    "query": "How to set up accounting period?",
-                    "relevant_doc_ids": [1, 2],
-                    "client": document.getElementById("evalClientInput").value.trim() || undefined,
-                    "module": document.getElementById("evalModuleInput").value.trim() || undefined
-                },
-                {
-                    "query": "What is the process for e-recruitment approval?",
-                    "relevant_doc_ids": [5],
-                    "client": document.getElementById("evalClientInput").value.trim() || undefined,
-                    "module": document.getElementById("evalModuleInput").value.trim() || undefined
-                }
-            ];
-            document.getElementById("evalJsonInput").value = JSON.stringify(sample, null, 2);
-        }
-
-        async function runEvaluationStudio() {
-            const btn = document.getElementById("runEvalBtn");
-            const rawJson = document.getElementById("evalJsonInput").value.trim();
+        async function runSingleEvaluation() {
+            const promptVal = document.getElementById("evalSinglePrompt").value.trim();
+            const keywordsVal = document.getElementById("evalExpectedKeywords").value.trim();
+            const clientVal = document.getElementById("evalClientInput").value.trim() || undefined;
+            const moduleVal = document.getElementById("evalModuleInput").value.trim() || undefined;
             const topK = parseInt(document.getElementById("evalTopKInput").value) || 5;
 
-            let testCases = [];
-            try {
-                testCases = JSON.parse(rawJson);
-                if (!Array.isArray(testCases)) throw new Error("JSON must be an array of test cases.");
-            } catch (err) {
-                alert("Invalid JSON format in test cases: " + err.message);
+            if (!promptVal) {
+                alert("Please enter a test prompt/question.");
                 return;
             }
 
+            const expectedList = keywordsVal ? keywordsVal.split(",").map(k => k.trim()).filter(Boolean) : [];
+
+            const btn = document.getElementById("runEvalBtn");
             btn.disabled = true;
-            btn.innerHTML = "<span>⏳ Computing Vector Similarity & Metrics...</span>";
+            btn.innerHTML = "<span>⏳ Computing Vector Similarity & Accuracy...</span>";
+
+            const testCase = [{
+                query: promptVal,
+                expected_keywords: expectedList.length > 0 ? expectedList : [promptVal],
+                client: clientVal,
+                module: moduleVal
+            }];
 
             try {
                 const res = await fetch("/api/eval/run", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ test_cases: testCases, top_k: topK })
+                    body: JSON.stringify({ test_cases: testCase, top_k: topK })
                 });
 
                 if (!res.ok) {
@@ -2659,31 +2656,50 @@
                 document.getElementById("metricRecall").textContent = (summary.mean_recall * 100).toFixed(1) + "%";
                 document.getElementById("metricF1").textContent = (summary.mean_f1_score * 100).toFixed(1) + "%";
                 document.getElementById("metricHitRate").textContent = (summary.mean_hit_rate * 100).toFixed(1) + "%";
-                document.getElementById("metricMRR").textContent = summary.mrr.toFixed(4);
+                document.getElementById("metricMRR").textContent = summary.mrr.toFixed(3);
                 document.getElementById("evalSummaryContainer").style.display = "block";
+                document.getElementById("evalDetailsHeader").style.display = "block";
 
-                // Render detail rows
+                // Render retrieved chunks with highlight
                 const detailsContainer = document.getElementById("evalDetailsContainer");
                 detailsContainer.innerHTML = "";
 
-                data.details.forEach((item, idx) => {
+                const item = data.details[0];
+                if (!item || !item.retrieved || item.retrieved.length === 0) {
+                    detailsContainer.innerHTML = `<div style="color:var(--text-muted); font-size:12px; padding:10px;">No chunks matched this query in the current database filter scope.</div>`;
+                    return;
+                }
+
+                item.retrieved.forEach((doc, rank) => {
                     const card = document.createElement("div");
-                    card.style.background = "rgba(14, 20, 32, 0.8)";
+                    card.style.background = "rgba(14, 20, 32, 0.85)";
                     card.style.border = "1px solid var(--border-subtle)";
                     card.style.borderRadius = "var(--radius-sm)";
-                    card.style.padding = "8px 12px";
-                    card.style.fontSize = "11.5px";
+                    card.style.padding = "10px 14px";
+                    card.style.fontSize = "12px";
 
-                    const m = item.metrics;
+                    // Check if matched any keyword
+                    const isHit = expectedList.length === 0 || expectedList.some(k => 
+                        doc.text.toLowerCase().includes(k.toLowerCase()) || (doc.source && doc.source.toLowerCase().includes(k.toLowerCase()))
+                    );
+
+                    const hitBadge = isHit 
+                        ? `<span style="background:rgba(16,185,129,0.15); color:var(--emerald); border:1px solid rgba(16,185,129,0.3); padding:2px 8px; border-radius:4px; font-weight:700; font-size:10.5px;">✓ HIT / RELEVANT</span>`
+                        : `<span style="background:rgba(244,63,94,0.1); color:var(--rose); border:1px solid rgba(244,63,94,0.25); padding:2px 8px; border-radius:4px; font-weight:600; font-size:10.5px;">✕ OFF-TARGET</span>`;
+
                     card.innerHTML = `
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                            <strong>#${idx + 1}: "${escapeHtml(item.query)}"</strong>
-                            <span style="font-family:'JetBrains Mono',monospace; color:var(--cyan);">
-                                P: ${(m.precision*100).toFixed(0)}% | R: ${(m.recall*100).toFixed(0)}% | F1: ${(m.f1_score*100).toFixed(0)}% | MRR: ${m.mrr.toFixed(2)}
-                            </span>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <strong style="color:var(--cyan); font-family:'JetBrains Mono',monospace;">Rank #${rank + 1}</strong>
+                                <span style="color:var(--text-muted); font-size:11px;">Score: ${(doc.score * 100).toFixed(1)}% (Distance: ${doc.distance.toFixed(4)})</span>
+                            </div>
+                            <div>${hitBadge}</div>
                         </div>
-                        <div style="color:var(--text-muted); font-size:10.5px;">
-                            Target Doc IDs: [${item.relevant_ids.join(", ")}] | Retrieved IDs: [${item.retrieved.map(r=>r.id).join(", ")}]
+                        <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px; font-family:'JetBrains Mono',monospace;">
+                            Source: ${escapeHtml(doc.source || "N/A")} | ID: ${doc.id}
+                        </div>
+                        <div style="color:var(--text-primary); line-height:1.45; background:rgba(0,0,0,0.3); padding:8px 10px; border-radius:4px;">
+                            ${escapeHtml(doc.text)}
                         </div>
                     `;
                     detailsContainer.appendChild(card);
@@ -2693,7 +2709,7 @@
                 alert("Evaluation error: " + err.message);
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = "<span>🚀 RUN RETRIEVAL EVALUATION</span>";
+                btn.innerHTML = "<span>🚀 EVALUATE RETRIEVAL ACCURACY</span>";
             }
         }
     </script>

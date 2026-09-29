@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agentic Audio KB — Conversational Assistant</title>
+    <style>
+        /* Strict High-Contrast White and Black Design with Comic Sans Typography */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Comic Sans MS', 'Comic Neue', cursive, sans-serif;
+        }
+
+        body {
+            background-color: #FFFFFF;
+            color: #000000;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .chat-container {
+            width: 100%;
+            max-width: 850px;
+            height: 90vh;
+            background: #FFFFFF;
+            border: 3px solid #000000;
+            border-radius: 16px;
+            box-shadow: 8px 8px 0px #000000;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Top Header */
+        .chat-header {
+            padding: 16px 20px;
+            border-bottom: 3px solid #000000;
+            background: #FFFFFF;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .chat-title {
+            font-size: 22px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-links a {
+            color: #000000;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 14px;
+            border: 2px solid #000000;
+            padding: 4px 10px;
+            border-radius: 8px;
+            background: #FFFFFF;
+            transition: all 0.15s;
+        }
+
+        .header-links a:hover {
+            background: #000000;
+            color: #FFFFFF;
+        }
+
+        /* Message Scroll Feed */
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            background: #FAFAFA;
+        }
+
+        .msg-row {
+            display: flex;
+            flex-direction: column;
+            max-width: 82%;
+        }
+
+        .msg-user {
+            align-self: flex-end;
+        }
+
+        .msg-assistant {
+            align-self: flex-start;
+        }
+
+        .msg-bubble {
+            padding: 14px 18px;
+            border: 2px solid #000000;
+            border-radius: 12px;
+            font-size: 15px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        .msg-user .msg-bubble {
+            background: #000000;
+            color: #FFFFFF;
+            border-bottom-right-radius: 2px;
+            box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.2);
+        }
+
+        .msg-assistant .msg-bubble {
+            background: #FFFFFF;
+            color: #000000;
+            border-bottom-left-radius: 2px;
+            box-shadow: 4px 4px 0px #000000;
+        }
+
+        .msg-meta {
+            font-size: 11px;
+            margin-top: 4px;
+            color: #555555;
+            font-weight: bold;
+        }
+
+        .msg-user .msg-meta {
+            text-align: right;
+        }
+
+        /* Clarification Module Buttons */
+        .options-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .option-btn {
+            background: #FFFFFF;
+            color: #000000;
+            border: 2px solid #000000;
+            border-radius: 8px;
+            padding: 8px 14px;
+            font-size: 13.5px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 3px 3px 0px #000000;
+            transition: all 0.1s ease;
+        }
+
+        .option-btn:hover {
+            transform: translate(-1px, -1px);
+            box-shadow: 4px 4px 0px #000000;
+            background: #000000;
+            color: #FFFFFF;
+        }
+
+        .option-btn:active {
+            transform: translate(2px, 2px);
+            box-shadow: 1px 1px 0px #000000;
+        }
+
+        /* Retrieved Sources Accordion Box */
+        .sources-box {
+            margin-top: 10px;
+            border-top: 2px dashed #000000;
+            padding-top: 8px;
+            font-size: 12px;
+        }
+
+        .sources-toggle {
+            cursor: pointer;
+            font-weight: bold;
+            display: inline-block;
+            margin-bottom: 6px;
+        }
+
+        .source-card {
+            background: #FFFFFF;
+            border: 1px solid #000000;
+            padding: 6px 10px;
+            border-radius: 6px;
+            margin-bottom: 6px;
+            font-size: 11.5px;
+        }
+
+        /* Input Bar */
+        .chat-input-container {
+            padding: 16px 20px;
+            background: #FFFFFF;
+            border-top: 3px solid #000000;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 14px 18px;
+            font-size: 15px;
+            border: 2px solid #000000;
+            border-radius: 10px;
+            outline: none;
+            background: #FFFFFF;
+            color: #000000;
+            box-shadow: 3px 3px 0px #000000;
+        }
+
+        .chat-input:focus {
+            box-shadow: 4px 4px 0px #000000;
+        }
+
+        .send-btn {
+            padding: 14px 24px;
+            font-size: 15px;
+            font-weight: bold;
+            background: #000000;
+            color: #FFFFFF;
+            border: 2px solid #000000;
+            border-radius: 10px;
+            cursor: pointer;
+            box-shadow: 3px 3px 0px #000000;
+            transition: all 0.1s ease;
+        }
+
+        .send-btn:hover:not(:disabled) {
+            transform: translate(-1px, -1px);
+            box-shadow: 5px 5px 0px #000000;
+        }
+
+        .send-btn:active {
+            transform: translate(2px, 2px);
+            box-shadow: 1px 1px 0px #000000;
+        }
+
+        .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Loading indicator */
+        .typing-dot {
+            display: inline-block;
+            width: 7px;
+            height: 7px;
+            background: #000000;
+            border-radius: 50%;
+            margin-right: 3px;
+            animation: typingBounce 1s infinite;
+        }
+
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typingBounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-6px); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="chat-container">
+        <!-- Header -->
+        <div class="chat-header">
+            <div class="chat-title">
+                🤖 <span>Conversational Audio Agent</span>
+            </div>
+            <div class="header-links">
+                <a href="/">← Studio Dashboard</a>
+            </div>
+        </div>
+
+        <!-- Chat Feed -->
+        <div class="chat-messages" id="chatFeed">
+            <div class="msg-row msg-assistant">
+                <div class="msg-bubble">
+                    Hello! Ask me any question about your recordings.
+                    If you don't mention which module (Finance, Credit, HR, etc.), I'll ask for clarification first and then search the exact moments in the database for you!
+                </div>
+                <div class="msg-meta">Agent • Just now</div>
+            </div>
+        </div>
+
+        <!-- Input Bar -->
+        <div class="chat-input-container">
+            <input type="text" id="userInput" class="chat-input" placeholder="Ask a question (e.g. 'How do I create a new fiscal period?')..." onkeydown="if(event.key==='Enter') sendMessage()">
+            <button id="sendBtn" class="send-btn" onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+
+    <script>
+        const chatFeed = document.getElementById("chatFeed");
+        const userInput = document.getElementById("userInput");
+        const sendBtn = document.getElementById("sendBtn");
+
+        let conversationHistory = [];
+        let activeForcedSubmodule = null;
+
+        function appendMessage(role, text, options = null, sources = null) {
+            const row = document.createElement("div");
+            row.className = `msg-row msg-${role}`;
+
+            let contentHtml = `<div class="msg-bubble">${escapeHtml(text)}</div>`;
+
+            // If clarification options provided
+            if (options && options.length > 0) {
+                contentHtml += `<div class="options-container">`;
+                options.forEach(opt => {
+                    contentHtml += `<button class="option-btn" onclick="selectSubmoduleOption('${opt.code}', '${escapeHtml(opt.label)}')">${escapeHtml(opt.label)}</button>`;
+                });
+                contentHtml += `</div>`;
+            }
+
+            // If sources retrieved
+            if (sources && sources.length > 0) {
+                const sId = "sources_" + Math.random().toString(36).substr(2, 9);
+                contentHtml += `
+                    <div class="sources-box">
+                        <span class="sources-toggle" onclick="toggleSources('${sId}')">📁 Referenced Recordings (${sources.length}) ▼</span>
+                        <div id="${sId}" style="display:none; margin-top:6px;">
+                `;
+                sources.forEach((s, idx) => {
+                    const startM = Math.floor(s.start_time / 60);
+                    const startS = Math.floor(s.start_time % 60);
+                    contentHtml += `
+                        <div class="source-card">
+                            <strong>#${idx+1} [${escapeHtml(s.submodule_name || s.submodule_code || 'General')}]</strong> 
+                            ${escapeHtml(s.source_file)} (${startM}:${startS < 10 ? '0' : ''}${startS})<br>
+                            <em>"${escapeHtml(s.text.substring(0, 100))}..."</em>
+                        </div>
+                    `;
+                });
+                contentHtml += `</div></div>`;
+            }
+
+            const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            contentHtml += `<div class="msg-meta">${role === 'user' ? 'You' : 'Agent'} • ${timeStr}</div>`;
+
+            row.innerHTML = contentHtml;
+            chatFeed.appendChild(row);
+            chatFeed.scrollTop = chatFeed.scrollHeight;
+        }
+
+        function toggleSources(id) {
+            const el = document.getElementById(id);
+            el.style.display = el.style.display === 'none' ? 'block' : 'none';
+        }
+
+        async function sendMessage(overrideText = null, forcedSub = null) {
+            const text = overrideText || userInput.value.trim();
+            if (!text) return;
+
+            if (!overrideText) {
+                userInput.value = "";
+            }
+
+            // Append user message
+            appendMessage("user", text);
+            conversationHistory.push({ role: "user", content: text });
+
+            // Show typing indicator
+            const typingRow = document.createElement("div");
+            typingRow.className = "msg-row msg-assistant";
+            typingRow.id = "typingIndicator";
+            typingRow.innerHTML = `<div class="msg-bubble"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>`;
+            chatFeed.appendChild(typingRow);
+            chatFeed.scrollTop = chatFeed.scrollHeight;
+
+            sendBtn.disabled = true;
+
+            try {
+                const res = await fetch("/api/agent/chat", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        messages: conversationHistory,
+                        submodule: forcedSub || activeForcedSubmodule
+                    })
+                });
+
+                // Remove typing indicator
+                const typingEl = document.getElementById("typingIndicator");
+                if (typingEl) typingEl.remove();
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || "Agent chat error");
+                }
+
+                const data = await res.json();
+                appendMessage("assistant", data.reply, data.options, data.sources);
+                conversationHistory.push({ role: "assistant", content: data.reply });
+
+                // Reset active forced submodule after answered
+                if (data.type === 'answer') {
+                    activeForcedSubmodule = null;
+                }
+
+            } catch (err) {
+                const typingEl = document.getElementById("typingIndicator");
+                if (typingEl) typingEl.remove();
+                appendMessage("assistant", "⚠️ Error: " + err.message);
+            } finally {
+                sendBtn.disabled = false;
+                userInput.focus();
+            }
+        }
+
+        function selectSubmoduleOption(code, label) {
+            activeForcedSubmodule = code;
+            sendMessage(`Searching in ${label}`, code);
+        }
+
+        function escapeHtml(text) {
+            if (!text) return "";
+            return String(text)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
