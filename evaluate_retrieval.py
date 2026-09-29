@@ -1,0 +1,230 @@
+"""
+Evaluation module for Information Retrieval (IR) / RAG pipeline.
+Calculates Precision, Recall, F1-Score, Hit Rate, and MRR (Mean Reciprocal Rank)
+for retrieved transcript chunks against a ground truth dataset.
+
+Usage:
+  python evaluate_retrieval.py --ground-truth ground_truth.json --top-k 5
+"""
+
+import argparse
+import json
+import os
+import sys
+from typing import List, Dict, Any
+import psycopg2
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Import embedding lookup logic from transcribe_to_kb
+from transcribe_to_kb import get_embeddings, get_db_connection
+
+def retrieve_top_k(query: str, top_k: int = 5, client: str = None, module: str = None) -> List[Dict[str, Any]]:
+    """Retrieves top_k document chunks from PostgreSQL vector store."""
+    query_emb = get_embeddings([query])[0]
+    q_literal = "[" + ",".join(str(x) for x in query_emb) + "]"
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    where_clauses = []
+    params = [q_literal]
+
+    if client:
+        where_clauses.append("source LIKE %s")
+        params.append(f"%client:{client}%")
+    if module:
+        where_clauses.append("source LIKE %s")
+        params.append(f"%module:{module}%")
+
+    where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+    params.append(top_k)
+
+    sql = f"""
+        SELECT id, source, chunk_text, (embedding <=> %s::vector) AS distance
+        FROM public.documents
+        {where_sql}
+        ORDER BY distance ASC
+        LIMIT %s;
+    """
+
+    cur.execute(sql, tuple(params))
+    results = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    retrieved = []
+    for r in results:
+        doc_id, source, text, dist = r
+        retrieved.append({
+            "id": doc_id,
+            "source": source,
+            "text": text,
+            "distance": float(dist),
+            "score": max(0.0, 1.0 - float(dist))
+        })
+    return retrieved
+
+
+def calculate_metrics(relevant_ids: List[int], retrieved_ids: List[int], k: int) -> Dict[str, float]:
+    """
+    Computes IR metrics for a single query:
+    - Precision@k
+    - Recall@k
+    - F1-Score@k
+    - Hit Rate@k
+    - MRR (Mean Reciprocal Rank)
+    """
+    retrieved_k = retrieved_ids[:k]
+    relevant_set = set(relevant_ids)
+    retrieved_set = set(retrieved_k)
+
+    # True Positives
+    tp = len(relevant_set.intersection(retrieved_set))
+
+    # Precision@k = TP / K
+    precision = tp / k if k > 0 else 0.0
+
+    # Recall@k = TP / Total Relevant
+    recall = tp / len(relevant_set) if len(relevant_set) > 0 else 0.0
+
+    # F1-Score@k = 2 * (P * R) / (P + R)
+    if precision + recall > 0:
+        f1_score = 2 * (precision * recall) / (precision + recall)
+    else:
+        f1_score = 0.0
+
+    # Hit Rate@k = 1 if at least one relevant document in top-k, else 0
+    hit_rate = 1.0 if tp > 0 else 0.0
+
+    # Reciprocal Rank (RR)
+    reciprocal_rank = 0.0
+    for rank, doc_id in enumerate(retrieved_k, 1):
+        if doc_id in relevant_set:
+            reciprocal_rank = 1.0 / rank
+            break
+
+    return {
+        "precision": precision,
+        "recall": recall,
+        "f1_score": f1_score,
+        "hit_rate": hit_rate,
+        "mrr": reciprocal_rank
+    }
+
+
+def create_sample_ground_truth(file_path: str):
+    """Generates a template ground truth JSON file for evaluation."""
+    sample_data = [
+        {
+            "query": "How to set up accounting period?",
+            "relevant_doc_ids": [1, 2],
+            "client": "TMRC",
+            "module": "02. Finance"
+        },
+        {
+            "query": "What is the process for e-recruitment approval?",
+            "relevant_doc_ids": [5],
+            "client": "TMRC",
+            "module": "03. E-Recruitment"
+        }
+    ]
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(sample_data, f, indent=4)
+    print(f"Sample ground truth template created at: {file_path}")
+
+
+def evaluate_pipeline(ground_truth_path: str, top_k: int = 5) -> Dict[str, Any]:
+    """Runs retrieval evaluation on ground truth queries."""
+    if not os.path.exists(ground_truth_path):
+        print(f"Ground truth file not found: {ground_truth_path}")
+        print("Generating a sample template ground_truth.json...")
+        create_sample_ground_truth(ground_truth_path)
+        print("Please update ground_truth.json with actual relevant document IDs from your database.")
+        sys.exit(1)
+
+    with open(ground_truth_path, "r", encoding="utf-8") as f:
+        test_cases = json.load(f)
+
+    total_queries = len(test_cases)
+    if total_queries == 0:
+        print("Ground truth dataset is empty.")
+        return {}
+
+    sum_precision = 0.0
+    sum_recall = 0.0
+    sum_f1 = 0.0
+    sum_hit_rate = 0.0
+    sum_mrr = 0.0
+
+    print(f"\n=======================================================")
+    print(f" Running Retrieval Evaluation (Total Queries: {total_queries}, Top K: {top_k})")
+    print(f"=======================================================\n")
+
+    query_details = []
+
+    for idx, item in enumerate(test_cases, 1):
+        query = item["query"]
+        relevant_ids = item.get("relevant_doc_ids", [])
+        client = item.get("client")
+        module = item.get("module")
+
+        retrieved = retrieve_top_k(query, top_k=top_k, client=client, module=module)
+        retrieved_ids = [doc["id"] for doc in retrieved]
+
+        metrics = calculate_metrics(relevant_ids, retrieved_ids, top_k)
+
+        sum_precision += metrics["precision"]
+        sum_recall += metrics["recall"]
+        sum_f1 += metrics["f1_score"]
+        sum_hit_rate += metrics["hit_rate"]
+        sum_mrr += metrics["mrr"]
+
+        query_details.append({
+            "query": query,
+            "relevant_ids": relevant_ids,
+            "retrieved_ids": retrieved_ids,
+            "metrics": metrics
+        })
+
+        print(f"[{idx}/{total_queries}] Query: '{query}'")
+        print(f"   Precision@{top_k}: {metrics['precision']:.4f} | Recall@{top_k}: {metrics['recall']:.4f} | F1-Score@{top_k}: {metrics['f1_score']:.4f}")
+        print(f"   Hit Rate@{top_k}: {metrics['hit_rate']:.4f} | Reciprocal Rank: {metrics['mrr']:.4f}\n")
+
+    # Aggregate Means
+    mean_metrics = {
+        "mean_precision": sum_precision / total_queries,
+        "mean_recall": sum_recall / total_queries,
+        "mean_f1_score": sum_f1 / total_queries,
+        "mean_hit_rate": sum_hit_rate / total_queries,
+        "mrr": sum_mrr / total_queries,
+        "total_queries": total_queries,
+        "top_k": top_k
+    }
+
+    print("=======================================================")
+    print(" EVALUATION SUMMARY RESULTS")
+    print("=======================================================")
+    print(f" Mean Precision@{top_k}:  {mean_metrics['mean_precision'] * 100:.2f}%")
+    print(f" Mean Recall@{top_k}:     {mean_metrics['mean_recall'] * 100:.2f}%")
+    print(f" Mean F1-Score@{top_k}:   {mean_metrics['mean_f1_score'] * 100:.2f}%")
+    print(f" Mean Hit Rate@{top_k}:   {mean_metrics['mean_hit_rate'] * 100:.2f}%")
+    print(f" MRR (Mean Reciprocal Rank): {mean_metrics['mrr']:.4f}")
+    print("=======================================================\n")
+
+    return mean_metrics
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Evaluate Information Retrieval (IR) metrics on Whisper transcription chunks.")
+    parser.add_argument("--ground-truth", default="ground_truth.json", help="Path to ground truth JSON file")
+    parser.add_argument("--top-k", type=int, default=5, help="Top-K documents to evaluate")
+    parser.add_argument("--create-template", action="store_true", help="Create a sample ground_truth.json template file")
+
+    args = parser.parse_args()
+
+    if args.create_template:
+        create_sample_ground_truth(args.ground_truth)
+    else:
+        evaluate_pipeline(args.ground_truth, top_k=args.top_k)

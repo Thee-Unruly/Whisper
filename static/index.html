@@ -1333,6 +1333,11 @@
                 <span class="engine-tag">Groq LPU (openai/gpt-oss-120b)</span>
                 <span class="engine-tag">all-MiniLM-L6-v2 (384d)</span>
             </div>
+            <button class="db-config-btn" id="evalModalBtn" onclick="openEvalModal()"
+                style="background: rgba(121, 40, 202, 0.15); border-color: rgba(121, 40, 202, 0.4); color: #D8B4FE;"
+                title="Run IR Metrics Evaluation (F1, Precision, Recall, Hit Rate, MRR)">
+                <span>📊 Evaluation Studio</span>
+            </button>
             <button class="db-config-btn" id="dbConfigBtn" onclick="openDbModal()"
                 title="Configure Vector Database (Supabase / Postgres)">
                 <span class="db-dot" id="dbDot"></span>
@@ -2484,6 +2489,213 @@
             </div>
         </div>
     </div>
-</body>
 
+    <!-- IR Evaluation Studio Modal -->
+    <div class="db-modal-overlay" id="evalModalOverlay" onclick="if(event.target===this) closeEvalModal()" style="display:none;">
+        <div class="db-modal-card" style="width: 1100px; max-width: 95vw; height: 88vh; max-height: 900px; display: flex; flex-direction: column; padding: 28px; gap: 18px; border-color: rgba(121, 40, 202, 0.4); box-shadow: 0 25px 70px rgba(0, 0, 0, 0.9), 0 0 45px rgba(121, 40, 202, 0.25);">
+            <!-- Modal Header -->
+            <div class="db-modal-header" style="padding-bottom: 14px; flex-shrink: 0;">
+                <div style="display: flex; align-items: center; gap: 14px;">
+                    <div style="width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(135deg, #7928CA 0%, #FF0080 100%); display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 0 20px rgba(255, 0, 128, 0.35);">
+                        📊
+                    </div>
+                    <div>
+                        <div class="db-modal-title" style="font-size: 19px; font-weight: 700; letter-spacing: -0.01em;">
+                            Retrieval Metrics & Evaluation Studio
+                        </div>
+                        <div class="db-modal-desc" style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">
+                            Benchmarking Vector Retrieval Accuracy across Chunks (Precision, Recall, F1-Score, Hit Rate, MRR)
+                        </div>
+                    </div>
+                </div>
+                <button class="db-close-btn" onclick="closeEvalModal()" title="Close" style="font-size: 26px; padding: 4px 10px;">&times;</button>
+            </div>
+
+            <!-- Modal Content (Scrollable) -->
+            <div style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding-right: 6px;">
+                
+                <!-- Controls Row -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr 120px; gap: 14px; flex-shrink: 0;">
+                    <div class="control-group">
+                        <label style="font-size: 11px; letter-spacing: 0.05em;">🏢 Target Client Scope</label>
+                        <input type="text" id="evalClientInput" placeholder="e.g. TMRC (Leave empty for Global)" style="padding: 11px 14px; font-size: 13px;">
+                    </div>
+                    <div class="control-group">
+                        <label style="font-size: 11px; letter-spacing: 0.05em;">📁 Submodule / Domain</label>
+                        <input type="text" id="evalModuleInput" placeholder="e.g. 02. Finance (Leave empty for Global)" style="padding: 11px 14px; font-size: 13px;">
+                    </div>
+                    <div class="control-group">
+                        <label style="font-size: 11px; letter-spacing: 0.05em;">Top K Depth</label>
+                        <input type="number" id="evalTopKInput" value="5" min="1" max="25" style="padding: 11px 14px; font-size: 14px; font-weight: 700; text-align: center; color: var(--cyan);">
+                    </div>
+                </div>
+
+                <!-- Ground Truth Dataset Editor -->
+                <div class="control-group" style="flex-shrink: 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <label style="font-size: 11px; letter-spacing: 0.05em;">Ground Truth Evaluation Queries & Target Doc IDs (JSON)</label>
+                        <button type="button" class="btn-secondary" style="padding: 4px 12px; font-size: 11.5px; border-color: rgba(121, 40, 202, 0.4); color: #D8B4FE;" onclick="loadSampleEvalJson()">
+                            🔄 Reset Sample Queries
+                        </button>
+                    </div>
+                    <textarea id="evalJsonInput" rows="7" style="width: 100%; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.5; background: rgba(8, 12, 20, 0.95); border: 1px solid var(--border-subtle); color: #E2E8F0; padding: 14px; border-radius: var(--radius-sm); outline: none; resize: vertical; box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.5);"></textarea>
+                </div>
+
+                <!-- Run Evaluation CTA Button -->
+                <button class="btn-primary btn-search" id="runEvalBtn" onclick="runEvaluationStudio()" style="padding: 13px 24px; font-size: 14px; letter-spacing: 0.03em; border-radius: var(--radius-sm); width: 100%; flex-shrink: 0; box-shadow: 0 4px 20px rgba(121, 40, 202, 0.4);">
+                    <span>🚀 EXECUTE EVALUATION BENCHMARK</span>
+                </button>
+
+                <!-- Metrics KPI Cards -->
+                <div id="evalSummaryContainer" style="display: none; flex-shrink: 0;">
+                    <div style="font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px;">
+                        📈 Benchmark Summary Results
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;">
+                        <div style="background: rgba(0, 242, 254, 0.08); border: 1px solid rgba(0, 242, 254, 0.3); border-radius: var(--radius-md); padding: 14px 10px; text-align: center;">
+                            <div style="font-size: 11px; font-weight: 700; color: var(--cyan); text-transform: uppercase; letter-spacing: 0.05em;">Precision@K</div>
+                            <div id="metricPrecision" style="font-size: 26px; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: var(--cyan); margin-top: 4px;">0.0%</div>
+                            <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">Relevant in Top K</div>
+                        </div>
+                        <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: var(--radius-md); padding: 14px 10px; text-align: center;">
+                            <div style="font-size: 11px; font-weight: 700; color: var(--emerald); text-transform: uppercase; letter-spacing: 0.05em;">Recall@K</div>
+                            <div id="metricRecall" style="font-size: 26px; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: var(--emerald); margin-top: 4px;">0.0%</div>
+                            <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">Captured Gold Docs</div>
+                        </div>
+                        <div style="background: rgba(121, 40, 202, 0.12); border: 1px solid rgba(121, 40, 202, 0.4); border-radius: var(--radius-md); padding: 14px 10px; text-align: center;">
+                            <div style="font-size: 11px; font-weight: 700; color: #D8B4FE; text-transform: uppercase; letter-spacing: 0.05em;">F1-Score@K</div>
+                            <div id="metricF1" style="font-size: 26px; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: #D8B4FE; margin-top: 4px;">0.0%</div>
+                            <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">Harmonic Mean</div>
+                        </div>
+                        <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: var(--radius-md); padding: 14px 10px; text-align: center;">
+                            <div style="font-size: 11px; font-weight: 700; color: var(--amber); text-transform: uppercase; letter-spacing: 0.05em;">Hit Rate@K</div>
+                            <div id="metricHitRate" style="font-size: 26px; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: var(--amber); margin-top: 4px;">0.0%</div>
+                            <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">At least 1 Hit in K</div>
+                        </div>
+                        <div style="background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.3); border-radius: var(--radius-md); padding: 14px 10px; text-align: center;">
+                            <div style="font-size: 11px; font-weight: 700; color: #FDA4AF; text-transform: uppercase; letter-spacing: 0.05em;">MRR</div>
+                            <div id="metricMRR" style="font-size: 26px; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: #FDA4AF; margin-top: 4px;">0.000</div>
+                            <div style="font-size: 10px; color: var(--text-muted); margin-top: 2px;">1 / First Hit Rank</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Per-Query Match Details Container -->
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <div id="evalDetailsHeader" style="display:none; font-size: 12px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em;">
+                        📋 Per-Query Match Breakdown
+                    </div>
+                    <div id="evalDetailsContainer" style="display: flex; flex-direction: column; gap: 10px;"></div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function openEvalModal() {
+            document.getElementById("evalModalOverlay").style.display = "flex";
+            if (!document.getElementById("evalJsonInput").value.trim()) {
+                loadSampleEvalJson();
+            }
+        }
+
+        function closeEvalModal() {
+            document.getElementById("evalModalOverlay").style.display = "none";
+        }
+
+        function loadSampleEvalJson() {
+            const sample = [
+                {
+                    "query": "How to set up accounting period?",
+                    "relevant_doc_ids": [1, 2],
+                    "client": document.getElementById("evalClientInput").value.trim() || undefined,
+                    "module": document.getElementById("evalModuleInput").value.trim() || undefined
+                },
+                {
+                    "query": "What is the process for e-recruitment approval?",
+                    "relevant_doc_ids": [5],
+                    "client": document.getElementById("evalClientInput").value.trim() || undefined,
+                    "module": document.getElementById("evalModuleInput").value.trim() || undefined
+                }
+            ];
+            document.getElementById("evalJsonInput").value = JSON.stringify(sample, null, 2);
+        }
+
+        async function runEvaluationStudio() {
+            const btn = document.getElementById("runEvalBtn");
+            const rawJson = document.getElementById("evalJsonInput").value.trim();
+            const topK = parseInt(document.getElementById("evalTopKInput").value) || 5;
+
+            let testCases = [];
+            try {
+                testCases = JSON.parse(rawJson);
+                if (!Array.isArray(testCases)) throw new Error("JSON must be an array of test cases.");
+            } catch (err) {
+                alert("Invalid JSON format in test cases: " + err.message);
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = "<span>⏳ Computing Vector Similarity & Metrics...</span>";
+
+            try {
+                const res = await fetch("/api/eval/run", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ test_cases: testCases, top_k: topK })
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || "Evaluation failed.");
+                }
+
+                const data = await res.json();
+                const summary = data.summary;
+
+                // Update scorecards
+                document.getElementById("metricPrecision").textContent = (summary.mean_precision * 100).toFixed(1) + "%";
+                document.getElementById("metricRecall").textContent = (summary.mean_recall * 100).toFixed(1) + "%";
+                document.getElementById("metricF1").textContent = (summary.mean_f1_score * 100).toFixed(1) + "%";
+                document.getElementById("metricHitRate").textContent = (summary.mean_hit_rate * 100).toFixed(1) + "%";
+                document.getElementById("metricMRR").textContent = summary.mrr.toFixed(4);
+                document.getElementById("evalSummaryContainer").style.display = "block";
+
+                // Render detail rows
+                const detailsContainer = document.getElementById("evalDetailsContainer");
+                detailsContainer.innerHTML = "";
+
+                data.details.forEach((item, idx) => {
+                    const card = document.createElement("div");
+                    card.style.background = "rgba(14, 20, 32, 0.8)";
+                    card.style.border = "1px solid var(--border-subtle)";
+                    card.style.borderRadius = "var(--radius-sm)";
+                    card.style.padding = "8px 12px";
+                    card.style.fontSize = "11.5px";
+
+                    const m = item.metrics;
+                    card.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                            <strong>#${idx + 1}: "${escapeHtml(item.query)}"</strong>
+                            <span style="font-family:'JetBrains Mono',monospace; color:var(--cyan);">
+                                P: ${(m.precision*100).toFixed(0)}% | R: ${(m.recall*100).toFixed(0)}% | F1: ${(m.f1_score*100).toFixed(0)}% | MRR: ${m.mrr.toFixed(2)}
+                            </span>
+                        </div>
+                        <div style="color:var(--text-muted); font-size:10.5px;">
+                            Target Doc IDs: [${item.relevant_ids.join(", ")}] | Retrieved IDs: [${item.retrieved.map(r=>r.id).join(", ")}]
+                        </div>
+                    `;
+                    detailsContainer.appendChild(card);
+                });
+
+            } catch (err) {
+                alert("Evaluation error: " + err.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = "<span>🚀 RUN RETRIEVAL EVALUATION</span>";
+            }
+        }
+    </script>
+</body>
 </html>

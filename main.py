@@ -309,6 +309,71 @@ def stats():
     return db.get_stats()
 
 
+# ==========================================
+# Evaluation UI Endpoints
+# ==========================================
+
+class EvalRequest(BaseModel):
+    test_cases: List[Dict[str, Any]]
+    top_k: int = 5
+
+
+@app.post("/api/eval/run")
+def run_evaluation(req: EvalRequest):
+    """
+    Runs IR retrieval metrics evaluation (Precision, Recall, F1, Hit Rate, MRR)
+    over a set of ground truth test cases.
+    """
+    import evaluate_retrieval
+    if not req.test_cases:
+        raise HTTPException(status_code=400, detail="Test cases cannot be empty.")
+
+    total_queries = len(req.test_cases)
+    sum_precision = 0.0
+    sum_recall = 0.0
+    sum_f1 = 0.0
+    sum_hit_rate = 0.0
+    sum_mrr = 0.0
+
+    query_results = []
+
+    for item in req.test_cases:
+        query = item.get("query", "")
+        relevant_ids = item.get("relevant_doc_ids", [])
+        client = item.get("client")
+        module = item.get("module")
+
+        retrieved = evaluate_retrieval.retrieve_top_k(query, top_k=req.top_k, client=client, module=module)
+        retrieved_ids = [doc["id"] for doc in retrieved]
+
+        metrics = evaluate_retrieval.calculate_metrics(relevant_ids, retrieved_ids, req.top_k)
+
+        sum_precision += metrics["precision"]
+        sum_recall += metrics["recall"]
+        sum_f1 += metrics["f1_score"]
+        sum_hit_rate += metrics["hit_rate"]
+        sum_mrr += metrics["mrr"]
+
+        query_results.append({
+            "query": query,
+            "relevant_ids": relevant_ids,
+            "retrieved": retrieved,
+            "metrics": metrics
+        })
+
+    summary = {
+        "mean_precision": round(sum_precision / total_queries, 4),
+        "mean_recall": round(sum_recall / total_queries, 4),
+        "mean_f1_score": round(sum_f1 / total_queries, 4),
+        "mean_hit_rate": round(sum_hit_rate / total_queries, 4),
+        "mrr": round(sum_mrr / total_queries, 4),
+        "total_queries": total_queries,
+        "top_k": req.top_k
+    }
+
+    return {"summary": summary, "details": query_results}
+
+
 # Serve static frontend
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
